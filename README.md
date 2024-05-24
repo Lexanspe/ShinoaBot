@@ -1,2 +1,2 @@
-# DiscordBotWithTenor
-Sending Tenor gif with using discord.js 
+# ShinoaBot
+Making a discord bot using discord.js 
