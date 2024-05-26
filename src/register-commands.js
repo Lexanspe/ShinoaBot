@@ -52,6 +52,30 @@ const commands = [
             }
         ]
     },
+    {
+        name: 'vc',
+        description: 'Joins the voice channel you are in',
+        options: [
+            {
+                name: 'join',
+                description: 'Joins the voice channel',
+                type: 1, 
+                required: false,
+            },
+            {
+                name: 'disconnect',
+                description: 'Disconnects the bot from the voice channel',
+                type: 1, 
+                required: false,
+            },
+            {
+                name: 'debug',
+                description: 'for developers only',
+                type: 1,
+                required: false,
+            }
+        ]
+    },
 
 
 
