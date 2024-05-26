@@ -21,9 +21,7 @@ client.on("ready", (c) => {
 client.on("interactionCreate", async (interaction) => {
     if (!interaction.isCommand()) return;
 
-    const { commandName } = interaction;
-
-    if (commandName === "gif") {
+    if (interaction.commandName === "gif") {
         if (interaction.options.getString('character') == "rickroll") {
             interaction.reply({ content: "nope, no rickroll", ephemeral: true });
             console.log("rickroll");
