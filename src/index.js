@@ -192,8 +192,8 @@ client.on("interactionCreate", async (interaction) => {
         
             let connection = joinVoiceChannel({
                 channelId: channel.id,
-                guildId: channel.guild.id,
-                adapterCreator: channel.guild.voiceAdapterCreator,
+                guildId: interaction.guild.id,
+                adapterCreator: interaction.guild.voiceAdapterCreator,
             });
             connections.set(channel, connection);
             interaction.reply({ content: "Joined the voice channel!" });
