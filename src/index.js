@@ -63,6 +63,10 @@ client.on("interactionCreate", async (interaction) => {
         let response = await fetch(url);
         let json = await response.json();
         let number = Math.floor(Math.random() * json.results.length);
+        if (interaction.user.id != interaction.options.getUser('user').tag) {
+            interaction.reply({ content: "You can't send gifs to yourself!", ephemeral: true });
+            return;
+        }
         if (interaction.options.getInteger('sgn') != null) {
             if (interaction.options.getInteger('sgn') > 20) {
                 interaction.reply({ content: "There are only 20 gifs available. Sorry!", ephemeral: true });
@@ -195,6 +199,7 @@ client.on("interactionCreate", async (interaction) => {
                 guildId: interaction.guild.id,
                 adapterCreator: interaction.guild.voiceAdapterCreator,
             });
+            c
             connections.set(channel, connection);
             interaction.reply({ content: "Joined the voice channel!" });
         }
