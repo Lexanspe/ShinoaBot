@@ -63,7 +63,7 @@ client.on("interactionCreate", async (interaction) => {
         let response = await fetch(url);
         let json = await response.json();
         let number = Math.floor(Math.random() * json.results.length);
-        if (interaction.user.id != interaction.options.getUser('user').tag) {
+        if (interaction.user.id == interaction.options.getUser('user').id) {
             interaction.reply({ content: "You can't send gifs to yourself!", ephemeral: true });
             return;
         }
