@@ -59,7 +59,7 @@ client.on("interactionCreate", async (interaction) => {
         
     }
     else if (interaction.commandName === "gif2someone") {
-        let url = `https://tenor.googleapis.com/v2/search?q=${interaction.options.getString('action')}+anime&key=${process.env.TENORKEY}&limit=20`
+        let url = `https://tenor.googleapis.com/v2/search?q=${interaction.options.getString('action')}+anime&key=${process.env.TENORKEY}&limit=10`
         let response = await fetch(url);
         let json = await response.json();
         let number = Math.floor(Math.random() * json.results.length);
@@ -68,8 +68,8 @@ client.on("interactionCreate", async (interaction) => {
             return;
         }
         if (interaction.options.getInteger('sgn') != null) {
-            if (interaction.options.getInteger('sgn') > 20) {
-                interaction.reply({ content: "There are only 20 gifs available. Sorry!", ephemeral: true });
+            if (interaction.options.getInteger('sgn') > 10) {
+                interaction.reply({ content: "There are only 10 gifs available. Sorry!", ephemeral: true });
                 return;
             } else if (interaction.options.getInteger('sgn') < 1) {
                 interaction.reply({ content: "The gif number must be greater than 0", ephemeral: true });
