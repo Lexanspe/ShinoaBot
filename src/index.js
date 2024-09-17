@@ -1,6 +1,6 @@
 require("dotenv").config();
 const { Client, IntentsBitField, EmbedBuilder } = require("discord.js");
-const { joinVoiceChannel } = require('@discordjs/voice');
+const { joinVoiceChannel, createAudioPlayer, createAudioResource } = require('@discordjs/voice');
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -12,6 +12,7 @@ const client = new Client({
         IntentsBitField.Flags.GuildMembers,
         IntentsBitField.Flags.GuildMessages,
         IntentsBitField.Flags.MessageContent,
+        IntentsBitField.Flags.GuildVoiceStates
     ]
 });
 
@@ -30,12 +31,13 @@ client.on("interactionCreate", async (interaction) => {
             console.log("rickroll");
             return;
         }
+
         let url = `https://tenor.googleapis.com/v2/search?q=${interaction.options.getString('character')}&key=${process.env.TENORKEY}&limit=50`
         let response = await fetch(url);
         let json = await response.json();
         let number = Math.floor(Math.random() * json.results.length);
         if (interaction.options.getBoolean('developermode')) {
-            if (interaction.user.id != process.env.OWNERID) { interaction.reply({ content: "You do not have permission to use developer.", ephemeral: true }); return;}
+            if (interaction.user.id != process.env.OWNERID) { interaction.reply({ content: "Geliştirici olduğunu sanmıyorum.", ephemeral: true }); return;}
             console.log("Developer mode activated");
             await interaction.reply(json.results[0].url);
             for (let i = 1; i < json.results.length; i++) {
@@ -45,10 +47,10 @@ client.on("interactionCreate", async (interaction) => {
 
             if (interaction.options.getInteger('sgn') != null) {
                 if (interaction.options.getInteger('sgn') > 50) {
-                    interaction.reply({ content: "There are only 50 gifs available. Sorry!", ephemeral: true });
+                    interaction.reply({ content: "Ne yazık ki sadece 50 gif var.", ephemeral: true });
                     return;
                 } else if (interaction.options.getInteger('sgn') < 1) {
-                    interaction.reply({ content: "The gif number must be greater than 0", ephemeral: true });
+                    interaction.reply({ content: "tek akıllı sendin", ephemeral: true });
                     return;
                 }
                 number = interaction.options.getInteger('sgn') - 1;
@@ -64,25 +66,24 @@ client.on("interactionCreate", async (interaction) => {
         let json = await response.json();
         let number = Math.floor(Math.random() * json.results.length);
         if (interaction.user.id == interaction.options.getUser('user').id) {
-            interaction.reply({ content: "You can't send gifs to yourself!", ephemeral: true });
+            interaction.reply({ content: "Kendine gif gönderemezsin.", ephemeral: true });
             return;
         }
-        if (interaction.options.getInteger('sgn') != null) {
+
+        if (interaction.options.getInteger('sgn') != null) { //specific gif number
             if (interaction.options.getInteger('sgn') > 10) {
-                interaction.reply({ content: "There are only 10 gifs available. Sorry!", ephemeral: true });
+                interaction.reply({ content: "Ne yazık ki sadece 10 gif var.", ephemeral: true });
                 return;
             } else if (interaction.options.getInteger('sgn') < 1) {
-                interaction.reply({ content: "The gif number must be greater than 0", ephemeral: true });
-                return;
+                interaction.reply({ content: "tek akıllı sendin", ephemeral: true });
+                return; 
             }
             number = interaction.options.getInteger('sgn') - 1;
         }
-        if (interaction.options.getUser('user').id == client.user.id) {
-            interaction.reply({ content: "I can't send gifs to myself!", ephemeral: true });
-            return;
-        }
+
         let actionType = interaction.options.getString('action');
         let action;
+        let whom;
         switch (actionType) {
             case 'cuddle':
                 action = "cuddled";
@@ -154,9 +155,19 @@ client.on("interactionCreate", async (interaction) => {
                 action = actionType;
         }
 
+        if (interaction.options.getUser('user').id == client.user.id) {
+            whom = "me";
+        }
+        else {
+            let user = interaction.options.getUser("user");
+            let member = await interaction.guild.members.fetch(user.id);
+            whom = member.nickname ? member.nickname : user.username;  
+        }
+
         interaction.guild.members.fetch(interaction.options.getUser('user')).then(async (user) => {
+            const userAvatarURL = interaction.user.displayAvatarURL();
             const embed = new EmbedBuilder()
-                .setDescription(`${interaction.member.nickname ? interaction.member.nickname : interaction.user.username} ${action} <@${user.id}>`)
+                .setAuthor({ name: `${interaction.member.nickname ? interaction.member.nickname : interaction.user.username} ${action} ${whom}!`, iconURL: userAvatarURL })
                 .setImage(json.results[number]["media_formats"]["gif"]["url"])
                 .setColor(0x54007f);
     
@@ -165,66 +176,95 @@ client.on("interactionCreate", async (interaction) => {
             //interaction.reply({ content: `Sent gif to ${user.tag}` });
         });
     }
+
     else if (interaction.commandName === "vc") {
-        let member = await interaction.guild.members.fetch(interaction.user.id);
-        console.log(`Member: ${member}`);
-        let channel = member.voice.channel;
-        console.log(`Channel: ${channel}`);
-        console.log(`Channel ID: ${channel ? channel.id : 'None'}`);
-        console.log(`Guild ID: ${interaction.guild.id}`);
         if (interaction.user.id != process.env.OWNERID) {
-            interaction.reply({ content: "Voice channel feature still in progress. Thank you for understanding.", ephemeral: true });
-            return;
-        }
-        if (interaction.options.getSubcommand() === 'debug') {     
-            for (let [channelId, connection] of connections.entries()) {
-                console.log(`Channel ID: ${channelId}`);
-                console.log(`Connection status: ${connection.status}`);
-                console.log(`Connection joinTimestamp: ${connection.joinTimestamp}`);
-                interaction.reply({ content: `Channel ID: ${channelId}\nConnection status: ${connection.status}\nConnection joinTimestamp: ${connection.joinTimestamp}` }, { ephemeral: true });
-            }
+            //interaction.reply({ content: "Voice channel feature still in progress. Thank you for understanding. <:understandable:1073559845518708736>", ephemeral: true });
+            //return;
         }
 
-        if (!channel) {
-            interaction.reply({ content: "You must be in a voice channel to use this command", ephemeral: true }); 
-            return;
-        }
-
-        if (interaction.options.getSubcommand() === 'join') {
+        if (interaction.options.getSubcommand() === 'play') {
             let member = await interaction.guild.members.fetch(interaction.user.id);
             let channel = member.voice.channel;
+            const selectedsong = interaction.options.getString('song');
+            const songlist = [];
         
-            let connection = joinVoiceChannel({
+            if (!channel) {
+                return interaction.reply({ content: "Önce bir ses kanalında bulunman gerekiyor.", ephemeral: true });
+            }
+            
+            if (connections.has(channel.id)) {
+                songlist.push(selectedsong);
+                console.log(songlist);
+                return;
+            }
+
+            let connection = await joinVoiceChannel({
                 channelId: channel.id,
                 guildId: interaction.guild.id,
                 adapterCreator: interaction.guild.voiceAdapterCreator,
             });
-            c
-            connections.set(channel, connection);
-            interaction.reply({ content: "Joined the voice channel!" });
+            connections.set(channel.id, connection);
+            
+            songlist.push(selectedsong);
+
+            console.log(songlist);
+
+            const player = createAudioPlayer();
+
+
+            resource = createAudioResource(`../songs/${songlist[0]}.mp3`);
+            player.play(resource);
+
+            player.addListener("stateChange", (oldOne, newOne) => {
+                console.log(oldOne.status, newOne.status);
+                if (oldOne.status == "playing" && newOne.status === "idle") {
+                    songlist.shift();
+                    console.log(songlist);
+                    resource = createAudioResource(`../songs/${songlist[0]}.mp3`);
+                    player.play(resource);
+                    if (songlist.length == 0) {
+                        connection.destroy();
+                        connections.delete(channel.id);
+                    }
+                }
+            });
+
+            await connection.subscribe(player);
+            await interaction.reply({ content: `Şu anda \"${selectedsong}\" oynatılıyor!` });
         }
-        
-        else if (interaction.options.getSubcommand() === 'disconnect') {
+
+        if (interaction.options.getSubcommand() === 'disconnect') {
             let member = await interaction.guild.members.fetch(interaction.user.id);
             let channel = member.voice.channel;
-            let connection = connections.get(channel);
+        
+            if (!channel) {
+                return interaction.reply({ content: "Herhangi bir ses kanalında değilsin!", ephemeral: true });
+            }
+        
+            let connection = connections.get(channel.id);
             if (connection) {
                 connection.destroy();
-                connections.delete(channel);
-                interaction.reply({content: "disconnected"});
+                connections.delete(channel.id);
+                interaction.reply({ content: "Ses kanalından ayrıldım. <:nice:1076907398264004709>" });
             } else {
-                interaction.reply({content: "not in vc"});
+                interaction.reply({ content: "Bulunduğun ses kanalında değilim... <a:sh2:1017889255973994546>" });
             }
         }
     }
+
+
+
+
+
     else if (interaction.commandName === "setbanner") {
         if (interaction.user.id != process.env.OWNERID) {
-            interaction.reply({ content: "You do not have permission to use this command", ephemeral: true });
+            interaction.reply({ content: "Geliştirici olduğunu sanmıyorum.", ephemeral: true });
             return;
         }
     
         try {
-            await client.user.setBanner('./banner.gif');
+            await client.user.setBanner('../banner.gif');
             console.log(`New banner set!`);
             interaction.reply({ content: "Banner set!" });
         } catch (error) {
