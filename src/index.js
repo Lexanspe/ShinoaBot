@@ -16,7 +16,8 @@ const client = new Client({
     ]
 });
 
-const connections = new Map();
+const connections = new Map();   
+const songlist = [];
 
 client.on("ready", (c) => {
     console.log(`Logged in as ${c.user.tag}`);
@@ -186,29 +187,30 @@ client.on("interactionCreate", async (interaction) => {
         if (interaction.options.getSubcommand() === 'play') {
             let member = await interaction.guild.members.fetch(interaction.user.id);
             let channel = member.voice.channel;
-            const selectedsong = interaction.options.getString('song');
-            const songlist = [];
+            let selectedsong = interaction.options.getString('song');
+            let connection;
         
             if (!channel) {
                 return interaction.reply({ content: "Önce bir ses kanalında bulunman gerekiyor.", ephemeral: true });
             }
+                         
+            songlist.push(selectedsong);
+
             
-            if (connections.has(channel.id)) {
-                songlist.push(selectedsong);
-                console.log(songlist);
+
+            if (!connections.has(channel.id)) {
+                connection = await joinVoiceChannel({
+                    channelId: channel.id,
+                    guildId: interaction.guild.id,
+                    adapterCreator: interaction.guild.voiceAdapterCreator,
+                });
+                connections.set(channel.id, connection);
+            } else {
+                interaction.reply(`Sıraya ${selectedsong} eklendi. Şu andaki sıra: ${songlist}`);
                 return;
             }
 
-            let connection = await joinVoiceChannel({
-                channelId: channel.id,
-                guildId: interaction.guild.id,
-                adapterCreator: interaction.guild.voiceAdapterCreator,
-            });
-            connections.set(channel.id, connection);
             
-            songlist.push(selectedsong);
-
-            console.log(songlist);
 
             const player = createAudioPlayer();
 
