@@ -189,6 +189,7 @@ client.on("interactionCreate", async (interaction) => {
             let channel = member.voice.channel;
             let selectedsong = interaction.options.getString('song');
             let connection;
+            let player;
         
             if (!channel) {
                 return interaction.reply({ content: "Önce bir ses kanalında bulunman gerekiyor.", ephemeral: true });
@@ -205,16 +206,13 @@ client.on("interactionCreate", async (interaction) => {
                     adapterCreator: interaction.guild.voiceAdapterCreator,
                 });
                 connections.set(channel.id, connection);
+                player = createAudioPlayer();
             } else {
                 interaction.reply(`Sıraya ${selectedsong} eklendi. Şu andaki sıra: ${songlist}`);
                 return;
             }
 
-            
-
-            const player = createAudioPlayer();
-
-
+        
             resource = createAudioResource(`../songs/${songlist[0]}.mp3`);
             player.play(resource);
 
@@ -225,6 +223,12 @@ client.on("interactionCreate", async (interaction) => {
                     console.log(songlist);
                     resource = createAudioResource(`../songs/${songlist[0]}.mp3`);
                     player.play(resource);
+                    if (songlist[1]) {
+                        interaction.followUp(`Şu anda ${songlist[0]} oynatılıyor, sıradaki şarkılar: ${songlist.slice(1)}`);
+                    } else if (songlist[0]) {
+                        interaction.followUp(`Şu anda ${songlist[0]} oynatılıyor.`);
+                    }
+                    
                     if (songlist.length == 0) {
                         connection.destroy();
                         connections.delete(channel.id);
@@ -248,6 +252,7 @@ client.on("interactionCreate", async (interaction) => {
             if (connection) {
                 connection.destroy();
                 connections.delete(channel.id);
+                songlist.length = 0;
                 interaction.reply({ content: "Ses kanalından ayrıldım. <:nice:1076907398264004709>" });
             } else {
                 interaction.reply({ content: "Bulunduğun ses kanalında değilim... <a:sh2:1017889255973994546>" });
