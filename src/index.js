@@ -195,9 +195,14 @@ client.on("interactionCreate", async (interaction) => {
             let connection;
             let player;
             let currentqueue = 1;
+            let loopstatus = "";
         
             if (!channel) {
                 return interaction.reply({ content: "Önce bir ses kanalında bulunman gerekiyor.", ephemeral: true });
+            }
+
+            if (loop.has(channel.id)) {
+                loopstatus = "(loop: enabled)";
             }
                          
             while (1){
@@ -208,8 +213,6 @@ client.on("interactionCreate", async (interaction) => {
                     break;
                 }
             };
-
-            
 
             if (!connections.has(channel.id)) {
                 connection = await joinVoiceChannel({
@@ -235,7 +238,7 @@ client.on("interactionCreate", async (interaction) => {
                     currentsonglist = currentsonglist.slice(0, -2);
                 }
 
-                interaction.reply(`Sıraya "${selectedsong}" eklendi. Şu andaki sıra: ${currentsonglist}`);
+                interaction.reply(`Sıraya "${selectedsong}" eklendi. Şu andaki sıra: ${currentsonglist} ${loopstatus}`);
                 return;
             }
 
@@ -249,6 +252,11 @@ client.on("interactionCreate", async (interaction) => {
             player.addListener("stateChange", (oldOne, newOne) => {
                 console.log(oldOne.status, newOne.status);
                 if (oldOne.status == "playing" && newOne.status === "idle") {
+                    
+                    loopstatus = "";
+                    if (loop.has(channel.id)) {
+                        loopstatus = "(loop: enabled)";
+                    }
 
                     if (!(loop.has(channel.id) && loop.get(channel.id))) {
                         currentqueue++;
@@ -269,22 +277,27 @@ client.on("interactionCreate", async (interaction) => {
                     console.log(songlist);
                     resource = createAudioResource(`../songs/${currentsong}.mp3`);
                     player.play(resource);
+                    
                     if (songlist.has(`${channel.id}-${currentqueue + 1}`)) {
                         let list_ = Array.from(songlist.values()).slice(currentqueue).join(', ');
                         if (list_.slice(-2) === ", ") {
                             list_ = list_.slice(0, -2);
                         }
-                        interaction.followUp(`Şu anda "${currentsong}" oynatılıyor, sıradaki şarkılar: ${list_}`);
+                        interaction.followUp(`Şu anda "${currentsong}" oynatılıyor, sıradaki şarkılar: ${list_} ${loopstatus}`);
                     } else if (songlist.has(`${channel.id}-${currentqueue}`)) {
-                        interaction.followUp(`Şu anda "${currentsong}" oynatılıyor.`);
+                        interaction.followUp(`Şu anda "${currentsong}" oynatılıyor. ${loopstatus}`);
                     }
                     
                     
                 }
             });
 
+            if (loop.has(channel.id)) {
+                loopstatus = "(loop: enabled)";
+            }
+
             await connection.subscribe(player);
-            await interaction.reply({ content: `Şu anda \"${selectedsong}\" oynatılıyor!` });
+            await interaction.reply({ content: `Şu anda \"${selectedsong}\" oynatılıyor! ${loopstatus}` });
         }
 
         else if (interaction.options.getSubcommand() === 'loop') {
@@ -292,16 +305,22 @@ client.on("interactionCreate", async (interaction) => {
                 return interaction.reply({ content: "Önce bir ses kanalında bulunman gerekiyor.", ephemeral: true });
             }
 
-            if (loop.has(channel.id)) {
-                loop.delete(channel.id);
-            }
 
             if (interaction.options.getBoolean('enable')) {
-                loop.set(channel.id, true);
-                interaction.reply({ content: "Şarkı döngüsü etkinleştirildi." });
+                if (loop.has(channel.id)) {   
+                    interaction.reply({ content: "Şarkı döngüsü zaten etkin.", ephemeral: true });
+                } else {
+                    loop.set(channel.id, true);
+                    interaction.reply({ content: "Şarkı döngüsü etkinleştirildi." });
+                }
             } else {
-                loop.set(channel.id, false);
-                interaction.reply({ content: "Şarkı döngüsü devre dışı bırakıldı." });
+                if (loop.has(channel.id)) {
+                    loop.delete(channel.id);
+                    interaction.reply({ content: "Şarkı döngüsü devre dışı bırakıldı." });
+                } else {
+                    interaction.reply({ content: "Şarkı döngüsü zaten devre dışı.", ephemeral: true });
+                }
+                
             }
         }
 
