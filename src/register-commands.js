@@ -76,6 +76,20 @@ const commands = [
                         required: true,
                     }
                 ]
+            },
+            {
+                name: 'loop',
+                description: 'loops the current song',
+                type: 1, 
+                required: false,
+                options: [
+                    {
+                        name: 'enable',
+                        description: 'Enable or disable looping',
+                        type: 5,
+                        required: true,
+                    }
+                ]
             }
         ]
     },
