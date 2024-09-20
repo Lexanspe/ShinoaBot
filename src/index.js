@@ -19,6 +19,7 @@ const client = new Client({
 const currentsongqueueglobal = new Map();
 const connections = new Map();   
 const songlist = new Map();
+const guilds = new Map();
 const loop = new Map();
 
 
@@ -182,6 +183,14 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     else if (interaction.commandName === "vc") {
+        console.log
+        if (!guilds.has(interaction.guild.id)) {
+            guilds.set(interaction.guild.id, interaction.channel.id);
+        }
+        else if (guilds.get(interaction.guild.id) != interaction.channel.id){
+            return interaction.reply({ content: `Komut kullanmak için <#${guilds.get(interaction.guild.id)}> kanalına gitmelisin.`, ephemeral: true });  
+        }
+
         let member = await interaction.guild.members.fetch(interaction.user.id);
         let channel = member.voice.channel;
         if (interaction.user.id != process.env.OWNERID) {
@@ -278,16 +287,17 @@ client.on("interactionCreate", async (interaction) => {
                     resource = createAudioResource(`../songs/${currentsong}.mp3`);
                     player.play(resource);
                     
-                    if (songlist.has(`${channel.id}-${currentqueue + 1}`)) {
-                        let list_ = Array.from(songlist.values()).slice(currentqueue).join(', ');
-                        if (list_.slice(-2) === ", ") {
-                            list_ = list_.slice(0, -2);
+                    if (!(loop.has(channel.id) && loop.get(channel.id))) {
+                        if (songlist.has(`${channel.id}-${currentqueue + 1}`)) {
+                            let list_ = Array.from(songlist.values()).slice(currentqueue).join(', ');
+                            if (list_.slice(-2) === ", ") {
+                                list_ = list_.slice(0, -2);
+                            }
+                            interaction.followUp(`Şu anda "${currentsong}" oynatılıyor, sıradaki şarkılar: ${list_} ${loopstatus}`);
+                        } else if (songlist.has(`${channel.id}-${currentqueue}`)) {
+                            interaction.followUp(`Şu anda "${currentsong}" oynatılıyor. ${loopstatus}`);
                         }
-                        interaction.followUp(`Şu anda "${currentsong}" oynatılıyor, sıradaki şarkılar: ${list_} ${loopstatus}`);
-                    } else if (songlist.has(`${channel.id}-${currentqueue}`)) {
-                        interaction.followUp(`Şu anda "${currentsong}" oynatılıyor. ${loopstatus}`);
                     }
-                    
                     
                 }
             });
@@ -338,6 +348,7 @@ client.on("interactionCreate", async (interaction) => {
                 }
                 connection.destroy();
                 connections.delete(channel.id);
+                guilds.delete(interaction.guild.id);
                 
                 interaction.reply({ content: "Ses kanalından ayrıldım. <:nice:1076907398264004709>" });
             } else {
