@@ -1,0 +1,49 @@
+const { SlashCommandBuilder } = require('discord.js');
+const { Player } = require('discord-music-player');
+
+// Create a new music player
+const player = new Player(client, {
+    leaveOnEmpty: false, // This option is optional.
+});
+
+// Add the player to the client
+client.player = player;
+
+module.exports = {
+    play: {
+        data: new SlashCommandBuilder()
+            .setName('play')
+            .setDescription('Play a song')
+            .addStringOption(option =>
+                option.setName('song')
+                    .setDescription('The name or URL of the song')
+                    .setRequired(true)),
+        async execute(interaction) {
+            const song = interaction.options.getString('song');
+            const channel = interaction.member.voice.channel;
+
+            if (!channel) {
+                return interaction.reply('You need to be in a voice channel to play music!');
+            }
+
+            let track = await client.player.play(channel, song, interaction.member.user);
+            interaction.reply(`Now playing: ${track.name}`);
+        },
+    },
+    stop: {
+        data: new SlashCommandBuilder()
+            .setName('stop')
+            .setDescription('Stop the music'),
+        async execute(interaction) {
+            const channel = interaction.member.voice.channel;
+
+            if (!channel) {
+                return interaction.reply('You need to be in a voice channel to stop music!');
+            }
+
+            let guildQueue = client.player.getQueue(interaction.guild.id);
+            guildQueue.stop();
+            interaction.reply('Music stopped.');
+        },
+    },
+};

@@ -1,0 +1,47 @@
+require("dotenv").config();
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+const { joinVoiceChannel, createAudioPlayer, createAudioResource } = require('@discordjs/voice');
+const fs = require('fs');
+
+module.exports = {
+    cooldown: 1,
+    data: new SlashCommandBuilder()
+      .setName("vc2")
+      .setDescription("Ses kanalıyla ilgili işlemler.")
+      .addSubcommand((subcommand) =>
+          subcommand
+          .setName("şarkı")
+          .setDescription("youtube linkinden şarkı çalar.")
+          .addStringOption((option) =>
+              option.setName("link")
+              .setDescription("yt linki")
+              .setRequired(true)
+            )
+        )
+        .addSubcommand((subcommand) =>
+            subcommand
+            .setName("çalma listesi")
+            .setDescription("youtube playlist linkinden şarkı çalar.")
+            .addStringOption((option) =>
+                option.setName("link")
+                .setDescription("youtube playlist linki")
+                .setRequired(true)
+                )
+            )
+        .addSubcommand((subcommand) =>
+            subcommand
+            .setName("şarkı arama")
+            .setDescription("youtube'da şarkı arar.")
+            .addStringOption((option) =>
+                option.setName("şarkıadı")
+                .setDescription("aramak istediğiniz şarkının adı.")
+                .setRequired(true)
+                )
+            ),
+    run: async ({ client, interaction}) => {
+        
+    }
+
+
+
+}

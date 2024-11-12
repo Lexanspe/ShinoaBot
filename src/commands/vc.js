@@ -1,14 +1,18 @@
 require("dotenv").config();
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 const { joinVoiceChannel, createAudioPlayer, createAudioResource } = require('@discordjs/voice');
-
+const fs = require('fs');
 
 const currentsongqueueglobal = new Map();
 const connections = new Map();   
 const songlist = new Map();
 const guilds = new Map();
+const voicechannels = new Map();
 const loop = new Map();
-
+const embeds = new Map();
+const raws = new Map();
+const list_s = new Map();
+const msgs = new Map();
 
 module.exports = {
   cooldown: 1,
@@ -30,21 +34,26 @@ module.exports = {
         .setDescription("sesten gider.")
       )
       .addSubcommand((subcommand) =>
-        subcommand.setName("tekrar")
+        subcommand.setName("tekrar") 
         .setDescription("şarkıyı tekrar ettirir.")
         .addBooleanOption((option) =>
             option.setName("açkapaamq")
             .setDescription("açar kapar amq")
             .setRequired(true)
           )
+      )
+      .addSubcommand((subcommand) =>
+        subcommand.setName("atla")
+        .setDescription("şarkıyı atlar.")
       ),
+
   async execute(interaction) {
-    console.log; //consoles log, im sorry
+    console.log; //consoles log, im sorry (bro MIGHT be sorry)
     if (!guilds.has(interaction.guild.id)) {
       guilds.set(interaction.guild.id, interaction.channel.id);
     } else if (guilds.get(interaction.guild.id) != interaction.channel.id) {
       return interaction.reply({
-        content: `Komut kullanmak için <#${guilds.get(interaction.guild.id)}> kanalına gitmelisin.`, ephemeral: true
+        content: `Kontrol paneli <#${guilds.get(interaction.guild.id)}> kanalında.`, ephemeral: true
       });
     }
 
@@ -61,6 +70,13 @@ module.exports = {
       let player;
       let currentqueue = 1;
       let loopstatus = "";
+
+      if (!fs.existsSync(`./songs/${selectedsong}.mp3`)) {
+        return interaction.reply({
+            content: `"${selectedsong}" mevcut değil.`,
+            ephemeral: true,
+        });
+      }
 
       if (!channel) {
         return interaction.reply({
@@ -82,12 +98,13 @@ module.exports = {
         }
       }
 
-      if (!connections.has(channel.id)) {
+      if (!voicechannels.has(interaction.guild.id)) {
         connection = await joinVoiceChannel({
           channelId: channel.id,
           guildId: interaction.guild.id,
           adapterCreator: interaction.guild.voiceAdapterCreator,
         });
+        voicechannels.set(interaction.guild.id, channel.id);
         connections.set(channel.id, connection);
         player = createAudioPlayer();
       } else {
@@ -107,9 +124,9 @@ module.exports = {
           currentsonglist = currentsonglist.slice(0, -2);
         }
 
-        interaction.reply(
-          `Sıraya "${selectedsong}" eklendi. Şu andaki sıra: ${currentsonglist} ${loopstatus}`
-        );
+        //interaction.reply(`Sıraya "${selectedsong}" eklendi. Şu andaki sıra: ${currentsonglist} ${loopstatus}`);
+        let message = msgs.get(interaction.guild.id);
+        await message.edit({ embdes: [embeds.get(channel.id)], components: [raws.get(channel.id)] });
         return;
       }
 
@@ -135,10 +152,15 @@ module.exports = {
           currentsongqueueglobal.delete(channel.id);
           currentsongqueueglobal.set(channel.id, currentqueue);
 
+          
+        
+
           if (!songlist.has(`${channel.id}-${currentqueue}`)) {
             connection.destroy();
             connections.delete(channel.id);
-            interaction.followUp("Ses kanalından ayrıldım. <:nice:1076907398264004709>");
+            guilds.delete(interaction.guild.id);
+            voicechannels.delete(interaction.guild.id);
+            //interaction.followUp("Ses kanalından ayrıldım. <:nice:1076907398264004709>");
             for (let i = 1; i <= currentqueue; i++) {
               songlist.delete(`${channel.id}-${i}`);
             }
@@ -152,13 +174,9 @@ module.exports = {
 
           if (!(loop.has(channel.id) && loop.get(channel.id))) {
             if (songlist.has(`${channel.id}-${currentqueue + 1}`)) {
-              let list_ = Array.from(songlist.values()).slice(currentqueue).join(", ");
-              if (list_.slice(-2) === ", ") {
-                list_ = list_.slice(0, -2);
-              }
-              interaction.followUp(`Şu anda "${currentsong}" oynatılıyor, sıradaki şarkılar: ${list_} ${loopstatus}`);
+              //interaction.followUp(`Şu anda "${currentsong}" oynatılıyor, sıradaki şarkılar: ${list_s.get(channel.id)} ${loopstatus}`);
             } else if (songlist.has(`${channel.id}-${currentqueue}`)) {
-              interaction.followUp(`Şu anda "${currentsong}" oynatılıyor. ${loopstatus}`);
+              //interaction.followUp(`Şu anda "${currentsong}" oynatılıyor. ${loopstatus}`);
             }
           }
         }
@@ -169,9 +187,146 @@ module.exports = {
       }
 
       await connection.subscribe(player);
-      await interaction.reply({
-        content: `Şu anda \"${selectedsong}\" oynatılıyor! ${loopstatus}`,
+
+      const embed = new EmbedBuilder()
+        .setTitle("Şarkı başladı!")
+        .setDescription(`Şu anda "${selectedsong}" oynatılıyor.`)
+        .setColor(0x54007f);
+
+      const raw = new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId("atla")
+            .setLabel("Atla")
+            .setStyle(1),
+          new ButtonBuilder()
+            .setCustomId("durdur")
+            .setLabel("Durdur")
+            .setStyle(2),
+          new ButtonBuilder()
+            .setCustomId("loop")
+            .setLabel("Döngüyü aktifleştir")
+            .setStyle(3),
+          new ButtonBuilder()
+            .setCustomId("git")
+            .setLabel("kanaldan çık")
+            .setStyle(4)
+        );
+
+      raws.set(channel.id, raw);
+      embeds.set(channel.id, embed);
+
+      const msg = await interaction.reply({ embeds: [embeds.get(channel.id)], components: [raws.get(channel.id)] });
+      const buttonInteraction = await msg.createMessageComponentCollector({
+          componentType: 2,
+          //filter: (i) => x
+          time: 600_000,
       });
+
+      msgs.set(interaction.guild.id, msg);
+
+      buttonInteraction.on("collect", async (i) => {
+        let member = await i.guild.members.fetch(i.user.id);
+        let channel = member.voice.channel;
+        let list_ = Array.from(songlist.values()).slice(currentsongqueueglobal.get(channel.id)).join(", ");
+          if (list_.slice(-2) === ", ") {
+            list_ = list_.slice(0, -2);
+          }
+        list_s.set(channel.id, list_);
+        if (!channel) {
+          await i.reply({content: "Herhangi bir ses kanalında değilsin!"});
+          return;
+        }
+        if (channel.id != voicechannels.get(i.guild.id)) {
+          await i.reply({content: `Şu anda <#${voicechannels.get(i.guild.id)}> kanalındayım.`});
+          return;
+        }
+          
+        if (i.customId == "loop") {
+            if (loop.has(channel.id)) { 
+              loop.delete(channel.id);
+
+              let embed = new EmbedBuilder()
+              .setTitle("Döngü devre dışı bırakıldı.")
+              .setDescription(`Şu anda "${selectedsong}" oynatılıyor.\n\nSıradaki şarkılar: ${list_s.get(channel.id)}`)
+              .setColor(0x54007f);
+              let raw = new ActionRowBuilder()
+              .addComponents(
+                new ButtonBuilder()
+                  .setCustomId("atla")
+                  .setLabel("Atla")
+                  .setStyle(1),
+                new ButtonBuilder()
+                  .setCustomId("durdur")
+                  .setLabel("Durdur")
+                  .setStyle(2),
+                new ButtonBuilder()
+                  .setCustomId("loop")
+                  .setLabel("Döngüyü aktifleştir")
+                  .setStyle(3),
+                new ButtonBuilder()
+                  .setCustomId("git")
+                  .setLabel("kanaldan çık")
+                  .setStyle(4)
+              );
+
+            embeds.set(channel.id, embed);
+            raws.set(channel.id, raw);
+
+            } else {
+              loop.set(channel.id, true);
+
+              let embed = new EmbedBuilder()
+              .setTitle("Döngü etkinleştirildi.")
+              .setDescription(`Şu anda "${selectedsong}" oynatılıyor.\nDöngü durumu: aktif\n\nSıradaki şarkılar: ${list_s.get(channel.id)}`)
+              .setColor(0x54007f);
+              let raw = new ActionRowBuilder()
+              .addComponents(
+                new ButtonBuilder()
+                  .setCustomId("atla")
+                  .setLabel("Atla")
+                  .setStyle(1),
+                new ButtonBuilder()
+                  .setCustomId("durdur")
+                  .setLabel("Durdur")
+                  .setStyle(2),
+                new ButtonBuilder()
+                  .setCustomId("loop")
+                  .setLabel("Döngüyü devre dışı bırak")
+                  .setStyle(4),
+                new ButtonBuilder()
+                  .setCustomId("git")
+                  .setLabel("kanaldan çık")
+                  .setStyle(4)
+              );
+            
+              embeds.set(channel.id, embed);
+              raws.set(channel.id, raw);
+
+            }
+          } else if (i.customId == "git") {
+            let connection = connections.get(channel.id);
+            
+            for (let j = 1; j <= currentsongqueueglobal.get(channel.id); j++) {
+              songlist.delete(`${channel.id}-${j}`);
+            }
+            connection.destroy();
+            connections.delete(channel.id);
+            guilds.delete(i.guild.id);
+            voicechannels.delete(i.guild.id);
+
+            await i.update({ content: "Ses kanalından ayrıldım. <:nice:1076907398264004709>", embeds: [], components: [] });
+            return;
+          }
+          // if else (i.customId == "atla") {}
+          else{
+            await i.update({ content: "Bir hata oluştu." });
+          }
+          await i.update({ embeds: [embeds.get(channel.id)], components: [raws.get(channel.id)] });
+        }       
+      )
+    
+
 
     } else if (interaction.options.getSubcommand() === "tekrar") {
       if (!channel) {
@@ -229,6 +384,13 @@ module.exports = {
             "Bulunduğun ses kanalında değilim... <a:sh2:1017889255973994546>",
         });
       }
+    } else if (interaction.options.getSubcommand() === "atla") {
+      if (!channel) {
+        return interaction.reply({
+          content: "Herhangi bir ses kanalında değilsin!",
+          ephemeral: true,
+        });
+      }
     }
-  },
+  }
 };
