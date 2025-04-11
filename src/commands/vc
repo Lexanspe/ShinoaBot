@@ -157,6 +157,7 @@ module.exports = {
 
           if (!songlist.has(`${channel.id}-${currentqueue}`)) {
             connection.destroy();
+            //interaction.followUp({ content: "Ses kanalından ayrıldım. <:nice:1076907398264004709>", embeds: [], components: [] });
             connections.delete(channel.id);
             guilds.delete(interaction.guild.id);
             voicechannels.delete(interaction.guild.id);
@@ -304,26 +305,29 @@ module.exports = {
               raws.set(channel.id, raw);
 
             }
-          } else if (i.customId == "git") {
-            let connection = connections.get(channel.id);
-            
-            for (let j = 1; j <= currentsongqueueglobal.get(channel.id); j++) {
-              songlist.delete(`${channel.id}-${j}`);
-            }
-            connection.destroy();
-            connections.delete(channel.id);
-            guilds.delete(i.guild.id);
-            voicechannels.delete(i.guild.id);
+        } else if (i.customId == "git") {
+          let connection = connections.get(channel.id);
+          
+          for (let j = 1; j <= currentsongqueueglobal.get(channel.id); j++) {
+            songlist.delete(`${channel.id}-${j}`);
+          }
+          if (loop.has(channel.id)) { 
+            loop.delete(channel.id);
+          }
+          connection.destroy();
+          connections.delete(channel.id);
+          guilds.delete(i.guild.id);
+          voicechannels.delete(i.guild.id);
 
-            await i.update({ content: "Ses kanalından ayrıldım. <:nice:1076907398264004709>", embeds: [], components: [] });
-            return;
-          }
-          // if else (i.customId == "atla") {}
-          else{
-            await i.update({ content: "Bir hata oluştu." });
-          }
-          await i.update({ embeds: [embeds.get(channel.id)], components: [raws.get(channel.id)] });
-        }       
+          await i.update({ content: "Ses kanalından ayrıldım. <:nice:1076907398264004709>", embeds: [], components: [] });
+          return;
+        }
+        // if else (i.customId == "atla") {}
+        else{
+          await i.update({ content: "Bir hata oluştu." });
+        }
+        await i.update({ embeds: [embeds.get(channel.id)], components: [raws.get(channel.id)] });
+      }       
       )
     
 

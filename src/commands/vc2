@@ -1,47 +1,321 @@
 require("dotenv").config();
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, SelectMenuBuilder } = require("discord.js");
 const { joinVoiceChannel, createAudioPlayer, createAudioResource } = require('@discordjs/voice');
 const fs = require('fs');
 
+const currentsongqueueglobal = new Map();
+const connections = new Map();   
+const songlist = new Map();
+const guilds = new Map();
+const voicechannels = new Map();
+const loop = new Map();
+const embeds = new Map();
+const raws = new Map();
+const raws2 = new Map();
+const list_s = new Map();
+const msgs = new Map();
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 module.exports = {
-    cooldown: 1,
-    data: new SlashCommandBuilder()
-      .setName("vc2")
-      .setDescription("Ses kanalıyla ilgili işlemler.")
-      .addSubcommand((subcommand) =>
-          subcommand
-          .setName("şarkı")
-          .setDescription("youtube linkinden şarkı çalar.")
-          .addStringOption((option) =>
-              option.setName("link")
-              .setDescription("yt linki")
-              .setRequired(true)
-            )
-        )
-        .addSubcommand((subcommand) =>
-            subcommand
-            .setName("çalma listesi")
-            .setDescription("youtube playlist linkinden şarkı çalar.")
-            .addStringOption((option) =>
-                option.setName("link")
-                .setDescription("youtube playlist linki")
-                .setRequired(true)
-                )
-            )
-        .addSubcommand((subcommand) =>
-            subcommand
-            .setName("şarkı arama")
-            .setDescription("youtube'da şarkı arar.")
-            .addStringOption((option) =>
-                option.setName("şarkıadı")
-                .setDescription("aramak istediğiniz şarkının adı.")
-                .setRequired(true)
-                )
-            ),
-    run: async ({ client, interaction}) => {
-        
+  cooldown: 1,
+  data: new SlashCommandBuilder()
+    .setName("ses")
+    .setDescription("Ses kanalıyla ilgili işlemler.")
+    ,
+
+  async execute(interaction) {
+    console.log; //consoles log, im sorry (bro MIGHT be sorry)
+    if (!guilds.has(interaction.guild.id)) {
+      guilds.set(interaction.guild.id, interaction.channel.id);
+    } else if (guilds.get(interaction.guild.id) != interaction.channel.id) {
+      return interaction.reply({
+        content: `Kontrol paneli <#${guilds.get(interaction.guild.id)}> kanalında.`, ephemeral: true
+      });
     }
 
+    let member = await interaction.guild.members.fetch(interaction.user.id);
+    let channel = member.voice.channel;
+    if (interaction.user.id != process.env.OWNERID) {
+      //interaction.reply({ content: "Voice channel feature still in progress. Thank you for understanding. <:understandable:1073559845518708736>", ephemeral: true });
+      //return;
+    }
+
+      let connection;
+      let resource;
+      let player = createAudioPlayer();
+      let currentqueue = 1;
+      let listedsong = 1;
+      let loopstatus = "";
+      console.log("ses");
+
+      if (!channel) {
+        return interaction.reply({
+          content: "Önce bir ses kanalında bulunman gerekiyor.",
+          ephemeral: true,
+        });
+      }
+
+      if (loop.has(channel.id)) {
+        loopstatus = "(loop: enabled)";
+      }
 
 
-}
+      if (!voicechannels.has(interaction.guild.id)) {
+        connection = await joinVoiceChannel({
+          channelId: channel.id,
+          guildId: interaction.guild.id,
+          adapterCreator: interaction.guild.voiceAdapterCreator,
+        });
+        voicechannels.set(interaction.guild.id, channel.id);
+        connections.set(channel.id, connection);
+
+      }
+
+      await connection.subscribe(player);
+
+      const embed = new EmbedBuilder()
+        .setTitle("Ses analına katıldım!")
+        .setColor(0x54007f);
+
+      const raw = new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId("atla")
+            .setLabel("Atla")
+            .setStyle(1),
+          new ButtonBuilder()
+            .setCustomId("durdur")
+            .setLabel("Durdur")
+            .setStyle(2),
+          new ButtonBuilder()
+            .setCustomId("loop")
+            .setLabel("Döngüyü aktifleştir")
+            .setStyle(3),
+          new ButtonBuilder()
+            .setCustomId("git")
+            .setLabel("kanaldan çık")
+            .setStyle(4)
+        );
+
+      const raw2 = new ActionRowBuilder()
+        .addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId('select')
+          .setPlaceholder('Choose an option')
+          .addOptions([
+              {
+                  label: 'wtf',
+                  description: 'This is option 1',
+                  value: 'wtf',
+              },
+              {
+                  label: 'duet',
+                  description: 'This is option 2',
+                  value: 'duet',
+              },
+          ])
+        );
+
+      raws.set(channel.id, raw);
+      raws2.set(channel.id, raw2);
+      embeds.set(channel.id, embed);
+
+      const msg = await interaction.reply({ embeds: [embeds.get(channel.id)], components: [raws.get(channel.id), raws2.get(channel.id)] });
+      const buttonInteraction = await msg.createMessageComponentCollector({
+          componentType: 2,
+          //filter: (i) => x
+          time: 600_000,
+      });
+
+      const selectMenuInteraction = await msg.createMessageComponentCollector({
+        componentType: 3, // 3 is for select menus
+        time: 600_000,
+      });
+
+      msgs.set(interaction.guild.id, msg);
+
+      buttonInteraction.on("collect", async (i) => {
+        let member = await i.guild.members.fetch(i.user.id);
+        let channel = member.voice.channel;
+        let list_ = Array.from(songlist.values()).slice(currentsongqueueglobal.get(channel.id)).join(", ");
+          if (list_.slice(-2) === ", ") {
+            list_ = list_.slice(0, -2);
+          }
+        list_s.set(channel.id, list_);
+        if (!channel) {
+          await i.reply({content: "Herhangi bir ses kanalında değilsin!"});
+          return;
+        }
+        if (channel.id != voicechannels.get(i.guild.id)) {
+          await i.reply({content: `Şu anda <#${voicechannels.get(i.guild.id)}> kanalındayım.`});
+          return;
+        }
+          
+        if (i.customId == "loop") {
+            if (loop.has(channel.id)) { 
+              loop.delete(channel.id);
+
+              let embed = new EmbedBuilder()
+              .setTitle("Döngü devre dışı bırakıldı.")
+              .setDescription(`Şu anda "${selectedsong}" oynatılıyor.\n\nSıradaki şarkılar: ${list_s.get(channel.id)}`)
+              .setColor(0x54007f);
+              let raw = new ActionRowBuilder()
+              .addComponents(
+                new ButtonBuilder()
+                  .setCustomId("atla")
+                  .setLabel("Atla")
+                  .setStyle(1),
+                new ButtonBuilder()
+                  .setCustomId("durdur")
+                  .setLabel("Durdur")
+                  .setStyle(2),
+                new ButtonBuilder()
+                  .setCustomId("loop")
+                  .setLabel("Döngüyü aktifleştir")
+                  .setStyle(3),
+                new ButtonBuilder()
+                  .setCustomId("git")
+                  .setLabel("kanaldan çık")
+                  .setStyle(4)
+              );
+
+            embeds.set(channel.id, embed);
+            raws.set(channel.id, raw);
+
+            } else {
+              loop.set(channel.id, true);
+              selectedsong = songlist.get(`${channel.id}-${currentqueue}`);
+              let embed = new EmbedBuilder()
+              .setTitle("Döngü etkinleştirildi.")
+              .setDescription(`Şu anda "${selectedsong}" oynatılıyor.\nDöngü durumu: aktif\n\nSıradaki şarkılar: ${list_s.get(channel.id)}`)
+              .setColor(0x54007f);
+              let raw = new ActionRowBuilder()
+              .addComponents(
+                new ButtonBuilder()
+                  .setCustomId("atla")
+                  .setLabel("Atla")
+                  .setStyle(1),
+                new ButtonBuilder()
+                  .setCustomId("durdur")
+                  .setLabel("Durdur")
+                  .setStyle(2),
+                new ButtonBuilder()
+                  .setCustomId("loop")
+                  .setLabel("Döngüyü devre dışı bırak")
+                  .setStyle(4),
+                new ButtonBuilder()
+                  .setCustomId("git")
+                  .setLabel("kanaldan çık")
+                  .setStyle(4)
+                
+              );
+            
+              embeds.set(channel.id, embed);
+              raws.set(channel.id, raw);
+
+            }
+        } else if (i.customId == "git") {
+          let connection = connections.get(channel.id);
+          
+          for (let j = 1; j <= currentsongqueueglobal.get(channel.id); j++) {
+            songlist.delete(`${channel.id}-${j}`);
+          }
+          if (loop.has(channel.id)) { 
+            loop.delete(channel.id);
+          }
+          connection.destroy();
+          connections.delete(channel.id);
+          guilds.delete(i.guild.id);
+          voicechannels.delete(i.guild.id);
+
+          await i.update({ content: "Ses kanalından ayrıldım. <:nice:1076907398264004709>", embeds: [], components: [] });
+          return;
+        }
+
+        // if else (i.customId == "atla") {}
+        else{
+          await i.update({ content: "Bir hata oluştu." });
+        }
+        await i.update({ embeds: [embeds.get(channel.id)], components: [raws.get(channel.id)] });
+      })
+    
+      selectMenuInteraction.on("collect", async (i) => {
+        if (i.customId === 'select') {
+            //console.log(player);
+            const selectedsong = i.values[0]; // Get the selected value
+            //console.log(selectedsong);
+            
+            songlist.set(`${channel.id}-${listedsong}`, selectedsong);
+            
+            
+            if (listedsong == 1) {
+              resource = createAudioResource(`./songs/${selectedsong}.mp3`);
+              console.log(selectedsong);
+              player.play(resource);
+              
+            } 
+
+            listedsong++;
+
+            await i.update({content: "Şarkı eklendi!", embeds: [embeds.get(channel.id)], components: [raws.get(channel.id), raws2.get(channel.id)] });
+
+            console.log("listedsong: " + listedsong);
+
+            if (listedsong != 1) { 
+             
+              player.addListener("stateChange", (oldOne, newOne) => {
+                console.log(oldOne.status, newOne.status);
+                if (oldOne.status == "playing" && newOne.status === "idle") {
+                  loopstatus = "";
+                  if (loop.has(channel.id)) {
+                    loopstatus = "(loop: enabled)";
+                  }
+        
+                  if (!(loop.has(channel.id) && loop.get(channel.id))) {
+                    currentqueue++;
+                  }
+        
+                  currentsongqueueglobal.delete(channel.id);
+                  currentsongqueueglobal.set(channel.id, currentqueue);
+        
+                  if (!songlist.has(`${channel.id}-${currentqueue}`)) {
+                    connection.destroy();
+                    //i.update({ content: "Ses kanalından ayrıldım. <:nice:1076907398264004709>", embeds: [], components: [] });
+                    connections.delete(channel.id);
+                    guilds.delete(interaction.guild.id);
+                    voicechannels.delete(interaction.guild.id);
+                    //interaction.followUp("Ses kanalından ayrıldım. <:nice:1076907398264004709>");
+                    for (let x = 1; x <= currentqueue; x++) {
+                      songlist.delete(`${channel.id}-${x}`);
+                    }
+                    console.log("1");
+                    return;
+                  }
+        
+                  let currentsong = songlist.get(`${channel.id}-${currentqueue}`);
+                  console.log(`${channel.id}-${currentqueue}`)
+                  console.log(songlist);
+                  resource = createAudioResource(`./songs/${currentsong}.mp3`);
+                  console.log(currentqueue);
+                  player.play(resource);
+                  console.log("0");
+
+        
+                  if (!(loop.has(channel.id) && loop.get(channel.id))) {
+                    if (songlist.has(`${channel.id}-${currentqueue + 1}`)) {
+                      //interaction.followUp(`Şu anda "${currentsong}" oynatılıyor, sıradaki şarkılar: ${list_s.get(channel.id)} ${loopstatus}`);
+                    } else if (songlist.has(`${channel.id}-${currentqueue}`)) {
+                      //interaction.followUp(`Şu anda "${currentsong}" oynatılıyor. ${loopstatus}`);
+                    }
+                  }
+                }
+              })
+            }
+        }
+      })
+    }
+  }
+;
