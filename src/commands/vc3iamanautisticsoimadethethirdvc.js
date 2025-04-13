@@ -19,6 +19,34 @@ data: new SlashCommandBuilder()
 
 
 async execute(interaction) {
+
+    async function updateEmbed(loop, style, desc, footer, msg) {
+        row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`open_modal`)
+                    .setLabel('Choose a song')
+                    .setStyle(ButtonStyle.Primary)
+            ).addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`loop`)
+                    .setLabel(loop)
+                    .setStyle(style)
+            ).addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`skip`)
+                    .setLabel('Skip')
+                    .setStyle(ButtonStyle.Primary)
+            )
+
+        embed = new EmbedBuilder() 
+            .setColor('#54007f')
+            .setTitle('idunno')
+            .setDescription(desc)
+            .setFooter(footer);
+        await msg.edit({ embeds: [embed], components: [row] });
+        
+    }
     
     (async () => {
         try {
@@ -84,12 +112,11 @@ async execute(interaction) {
     }
 
     
-    if (!songs.get(`${interaction.guild.id}-1`)) {
-        embed = new EmbedBuilder()
-        .setColor('#54007f')
-        .setTitle('idunno')
-        .setDescription("idunno")
-
+    if (!songs.get(`${interaction.guild.id}-1`)) {      
+        var desc = `No song is currently playing.`
+        var loop = "Loop";
+        var style = ButtonStyle.Primary;
+        var footer = { text: `No song in playlist` }; 
         row = new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()
@@ -99,49 +126,45 @@ async execute(interaction) {
         ).addComponents(
             new ButtonBuilder()
                 .setCustomId(`loop`)
-                .setLabel('Loop')
+                .setLabel(loop)
+                .setStyle(style)
+        )    
+    } else {
+        var desc = `Playing: ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)}\nLoop: ${loops.get(interaction.guild.id) ? 'enabled' : 'disabled'}`
+        var footer = { text: `Song ${queue.get(interaction.guild.id)} of ${songs.size}` };
+        if (loops.get(interaction.guild.id)) {
+            var loop = "Disable Loop";
+            var style = ButtonStyle.Danger;            
+        } else {
+            var loop = "Loop";
+            var style = ButtonStyle.Primary;
+        }
+        row = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId(`open_modal`)
+                .setLabel('Choose a song')
+                .setStyle(ButtonStyle.Primary)
+        ).addComponents(
+            new ButtonBuilder()
+                .setCustomId(`loop`)
+                .setLabel(loop)
+                .setStyle(style)
+        ).addComponents(
+            new ButtonBuilder()
+                .setCustomId(`skip`)
+                .setLabel('Skip')
                 .setStyle(ButtonStyle.Primary)
         )
-    } else {
-        embed = new EmbedBuilder() 
+
+    }
+    embed = new EmbedBuilder()
         .setColor('#54007f')
         .setTitle('idunno')
-        .setDescription(`Playing: ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)}\nLoop: ${loops.get(interaction.guild.id) ? 'enabled' : 'disabled'}`)
-        .setFooter({ text: `Song ${queue.get(interaction.guild.id)} of ${songs.size}` });
-        if (loops.get(interaction.guild.id)) {
-            row = new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`open_modal`)
-                    .setLabel('Choose a song')
-                    .setStyle(ButtonStyle.Primary)
-            ).addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`loop`)
-                    .setLabel('Disable Loop')
-                    .setStyle(ButtonStyle.Danger)
-            )
-            
-        } else {
-            row = new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`open_modal`)
-                    .setLabel('Choose a song')
-                    .setStyle(ButtonStyle.Primary)
-            ).addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`loop`)
-                    .setLabel('Loop')
-                    .setStyle(ButtonStyle.Primary)
-            )
-            
-        }
-    }
-
-   
-
-
+        .setDescription(desc)
+        .setFooter(footer);
+    
+    
     const msg = await interaction.reply({ embeds: [embed], components: [row], fetchReply: true });
     msgs.set(interaction.guild.id, msg);
     
@@ -183,41 +206,30 @@ async execute(interaction) {
         } else if (buttonInteraction.customId === `loop`) {
             if (loops.get(interaction.guild.id)) {
                 loops.delete(interaction.guild.id);
-                row = new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(`open_modal`)
-                        .setLabel('Choose a song')
-                        .setStyle(ButtonStyle.Primary)
-                ).addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(`loop`)
-                        .setLabel('Loop')
-                        .setStyle(ButtonStyle.Primary)
-                )
-                
+                var loop = "Loop";
+                var style = ButtonStyle.Primary;     
             } else {
                 loops.set(interaction.guild.id, true);
-                row = new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(`open_modal`)
-                        .setLabel('Choose a song')
-                        .setStyle(ButtonStyle.Primary)
-                ).addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(`loop`)
-                        .setLabel('Disable Loop')
-                        .setStyle(ButtonStyle.Danger)
-                )
-                
+                var loop = "Disable Loop";
+                var style = ButtonStyle.Danger;          
             }
-            embed = new EmbedBuilder() 
-            .setColor('#54007f')
-            .setTitle('idunno')
-            .setDescription(`Playing: ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)}\nLoop: ${loops.get(interaction.guild.id) ? 'enabled' : 'disabled'}`)
-            .setFooter({ text: `Song ${queue.get(interaction.guild.id)} of ${songs.size}` });
-            await msg.edit({ embeds: [embed], components: [row] });
+            desc = (`Playing: ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)}\nLoop: ${loops.get(interaction.guild.id) ? 'enabled' : 'disabled'}`);
+            footer = { text: `Song ${queue.get(interaction.guild.id)} of ${songs.size}` };
+            updateEmbed(loop, style, desc, footer, msg);
+
+        } else if (buttonInteraction.customId === `skip`) {
+            player.stop();
+            if (loops.get(interaction.guild.id)) {
+                queue.set(interaction.guild.id, queue.get(interaction.guild.id) + 1);     
+                var loop = "Disable Loop";
+                var style = ButtonStyle.Danger;           
+            } else {
+                var loop = "Loop";
+                var style = ButtonStyle.Primary;
+            }
+            desc = (`Playing: ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)}\nLoop: ${loops.get(interaction.guild.id) ? 'enabled' : 'disabled'}`);
+            footer = { text: `Song ${queue.get(interaction.guild.id)} of ${songs.size}` };
+            updateEmbed(loop, style, desc, footer, msg);
         }
     });
 
@@ -258,43 +270,16 @@ async execute(interaction) {
                 });
             }
 
-            embed = new EmbedBuilder() 
-            .setColor('#54007f')
-            .setTitle('idunno')
-            .setDescription(`Playing: ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)}\nLoop: ${loops.get(interaction.guild.id) ? 'enabled' : 'disabled'}`)
-            .setFooter({ text: `Song ${queue.get(interaction.guild.id)} of ${songs.size}` });
-
             if (loops.get(interaction.guild.id)) {
-                row = new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(`open_modal`)
-                        .setLabel('Choose a song')
-                        .setStyle(ButtonStyle.Primary)
-                ).addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(`loop`)
-                        .setLabel('Disable Loop')
-                        .setStyle(ButtonStyle.Danger)
-                )
-                
+                var loop = "Disable Loop";
+                var style = ButtonStyle.Danger;           
             } else {
-                row = new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(`open_modal`)
-                        .setLabel('Choose a song')
-                        .setStyle(ButtonStyle.Primary)
-                ).addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(`loop`)
-                        .setLabel('Loop')
-                        .setStyle(ButtonStyle.Primary)
-                )
-                
+                var loop = "Loop";
+                var style = ButtonStyle.Primary;
             }
-
-            await msg.edit({ embeds: [embed], components: [row] });
+            desc = (`Playing: ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)}\nLoop: ${loops.get(interaction.guild.id) ? 'enabled' : 'disabled'}`);
+            footer = { text: `Song ${queue.get(interaction.guild.id)} of ${songs.size}` };
+            updateEmbed(loop, style, desc, footer, msg);
         });
 
         } catch(error){
