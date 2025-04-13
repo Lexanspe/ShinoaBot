@@ -75,11 +75,8 @@ async execute(interaction) {
                         //interaction.followUp("Ses kanalından ayrıldım. <:nice:1076907398264004709>");
 
                         return;
-
-        
-        
                     }
-                  })
+                })
             }
         }
         const embed = new EmbedBuilder()
