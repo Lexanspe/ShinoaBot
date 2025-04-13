@@ -2,7 +2,6 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butt
 const { joinVoiceChannel, createAudioPlayer, createAudioResource } = require('@discordjs/voice');
 const fs = require('fs');
 
-
 const songs = new Map();
 const queue = new Map();
 const activeCollectors = new Map();
@@ -16,12 +15,43 @@ module.exports = {
 data: new SlashCommandBuilder()
 .setName('idunno'),
 
-
-
 async execute(interaction) {
 
-    async function updateEmbed(loop, style, desc, footer, msg) {
-        row = new ActionRowBuilder()
+
+
+    async function updateEmbed() {
+        let msg = msgs.get(interaction.guild.id);
+        if (loops.get(interaction.guild.id)) {  
+            var loop = "Disable Loop";
+            var style = ButtonStyle.Danger;           
+        } else {
+            var loop = "Loop";
+            var style = ButtonStyle.Primary;
+        }
+        if (!songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)) {
+            var desc = `No song is currently playing.`
+            var footer = `No song in playlist`;
+            row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`open_modal`)
+                    .setLabel('Choose a song')
+                    .setStyle(ButtonStyle.Primary)
+            ).addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`loop`)
+                    .setLabel(loop)
+                    .setStyle(style)
+            ).addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`quit`)
+                    .setLabel('Quit')
+                    .setStyle(ButtonStyle.Danger)
+            )
+        } else {
+            desc = (`Playing: ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)}\nLoop: ${loops.get(interaction.guild.id) ? 'enabled' : 'disabled'}`);
+            footer = `Song ${queue.get(interaction.guild.id)} of ${songs.size}`;
+            row = new ActionRowBuilder()
             .addComponents(
                 new ButtonBuilder()
                     .setCustomId(`open_modal`)
@@ -37,15 +67,32 @@ async execute(interaction) {
                     .setCustomId(`skip`)
                     .setLabel('Skip')
                     .setStyle(ButtonStyle.Primary)
+            ).addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`quit`)
+                    .setLabel('Quit')
+                    .setStyle(ButtonStyle.Danger)
             )
-
+        }
+ 
+        
         embed = new EmbedBuilder() 
             .setColor('#54007f')
             .setTitle('idunno')
             .setDescription(desc)
-            .setFooter(footer);
-        await msg.edit({ embeds: [embed], components: [row] });
-        
+            .setFooter({ text: `${footer}` });	
+        await msg.edit({ embeds: [embed], components: [row] });        
+    }
+
+    async function deleteQueue(interaction) {
+        for (let i = 1; i; i++) {
+            if (!songs.get(`${interaction.guild.id}-${i}`)) {
+                break;
+            } else {
+                songs.delete(`${interaction.guild.id}-${i}`);
+            }
+        }
+        console.log("queue deleted")
     }
     
     (async () => {
@@ -60,13 +107,13 @@ async execute(interaction) {
     if (msgs.has(interaction.guild.id)) {
         const oldMsg = msgs.get(interaction.guild.id);
         //oldMsg.delete();
-        msgs.delete(interaction.guild.id);
+        //msgs.delete(interaction.guild.id);
     }
 
-    if (!guildPlayers.has(interaction.guild.id)) {
+    member = await interaction.guild.members.fetch(interaction.user.id);
+    channel = member.voice.channel;
 
-        member = await interaction.guild.members.fetch(interaction.user.id);
-        channel = member.voice.channel;
+    if (!guildPlayers.has(interaction.guild.id)) {
         player = createAudioPlayer();
 
         if (channel) {
@@ -76,10 +123,7 @@ async execute(interaction) {
                 adapterCreator: interaction.guild.voiceAdapterCreator,
             });
             await connection.subscribe(player);
-        
-            
-            
-
+ 
             player.on("stateChange", (oldOne, newOne) => {
                 console.log(oldOne.status, newOne.status);
                 if (oldOne.status === "playing" && newOne.status === "idle") {
@@ -91,18 +135,12 @@ async execute(interaction) {
                         resource = createAudioResource(`./songs/${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 1}`)}.mp3`);
                         player.play(resource);
                         queue.set(interaction.guild.id, queue.get(interaction.guild.id) + 1);
+                        updateEmbed();
                     } else {
                         player.stop();
-                        queue.delete(interaction.guild.id);              
-                    
-                        for (let i = 1; i; i++) {
-                            if (!songs.get(`${interaction.guild.id}-${i}`)) {
-                                break;
-                            } else {
-                                songs.delete(`${interaction.guild.id}-${i}`);
-                            }
-                        }
-                        console.log("queue deleted")
+                        queue.delete(interaction.guild.id);                                              
+                        deleteQueue(interaction);
+                        updateEmbed();
                     }                    
                 }
             })        
@@ -111,8 +149,7 @@ async execute(interaction) {
         }
     }
 
-    
-    if (!songs.get(`${interaction.guild.id}-1`)) {      
+    if (!songs.get(`${interaction.guild.id}-1`)) {
         var desc = `No song is currently playing.`
         var loop = "Loop";
         var style = ButtonStyle.Primary;
@@ -128,7 +165,12 @@ async execute(interaction) {
                 .setCustomId(`loop`)
                 .setLabel(loop)
                 .setStyle(style)
-        )    
+        ).addComponents(
+            new ButtonBuilder()
+                .setCustomId(`quit`)
+                .setLabel('Quit')
+                .setStyle(ButtonStyle.Danger)
+        )
     } else {
         var desc = `Playing: ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)}\nLoop: ${loops.get(interaction.guild.id) ? 'enabled' : 'disabled'}`
         var footer = { text: `Song ${queue.get(interaction.guild.id)} of ${songs.size}` };
@@ -155,6 +197,11 @@ async execute(interaction) {
                 .setCustomId(`skip`)
                 .setLabel('Skip')
                 .setStyle(ButtonStyle.Primary)
+        ).addComponents(
+            new ButtonBuilder()
+                .setCustomId(`quit`)
+                .setLabel('Quit')
+                .setStyle(ButtonStyle.Danger)
         )
 
     }
@@ -164,28 +211,22 @@ async execute(interaction) {
         .setDescription(desc)
         .setFooter(footer);
     
-    
     const msg = await interaction.reply({ embeds: [embed], components: [row], fetchReply: true });
     msgs.set(interaction.guild.id, msg);
     
     //console.log(activeCollectors.entries())
-
-    //button interaction
-    const filter = (i) => i.user.id === interaction.user.id;
-    const collector = interaction.channel.createMessageComponentCollector({ filter, time: 600000 });
+    const collector = interaction.channel.createMessageComponentCollector({ time: 600000 });
     //console.log(collector);
     activeCollectors.set(interaction.guild.id, collector);
     //console.log(activeCollectors.get(interaction.guild.id));
     collector.on('end', (collected, reason) => {
         if (reason === 'time') {
             interaction.followUp({ content: 'Collector timed out. You can call the command again by using /idunno', ephemeral: true });
-
         }
         activeCollectors.delete(interaction.guild.id);
         
     });
     
-
     collector.on('collect', async (buttonInteraction) => {
         if (buttonInteraction.customId === `open_modal`) {
         const modal = new ModalBuilder()
@@ -205,31 +246,25 @@ async execute(interaction) {
         await buttonInteraction.showModal(modal);
         } else if (buttonInteraction.customId === `loop`) {
             if (loops.get(interaction.guild.id)) {
-                loops.delete(interaction.guild.id);
-                var loop = "Loop";
-                var style = ButtonStyle.Primary;     
+                loops.delete(interaction.guild.id);  
             } else {
                 loops.set(interaction.guild.id, true);
-                var loop = "Disable Loop";
-                var style = ButtonStyle.Danger;          
             }
-            desc = (`Playing: ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)}\nLoop: ${loops.get(interaction.guild.id) ? 'enabled' : 'disabled'}`);
-            footer = { text: `Song ${queue.get(interaction.guild.id)} of ${songs.size}` };
-            updateEmbed(loop, style, desc, footer, msg);
+            updateEmbed();
 
         } else if (buttonInteraction.customId === `skip`) {
             player.stop();
             if (loops.get(interaction.guild.id)) {
                 queue.set(interaction.guild.id, queue.get(interaction.guild.id) + 1);     
-                var loop = "Disable Loop";
-                var style = ButtonStyle.Danger;           
-            } else {
-                var loop = "Loop";
-                var style = ButtonStyle.Primary;
             }
-            desc = (`Playing: ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)}\nLoop: ${loops.get(interaction.guild.id) ? 'enabled' : 'disabled'}`);
-            footer = { text: `Song ${queue.get(interaction.guild.id)} of ${songs.size}` };
-            updateEmbed(loop, style, desc, footer, msg);
+            updateEmbed();
+        } else if (buttonInteraction.customId === `quit`) {
+            player.stop();
+            connection.destroy();
+            guildPlayers.delete(interaction.guild.id);
+            collector.stop("quit");
+            deleteQueue(interaction);
+            return interaction.editReply({ content: 'Disconnected from the voice channel.', embeds: [], components: [] });
         }
     });
 
@@ -239,7 +274,7 @@ async execute(interaction) {
             if (!modalInteraction.isModalSubmit() || modalInteraction.customId !== `input_modal`) return;
             guildPlayers.set(interaction.guild.id, player);
             const userInput = modalInteraction.fields.getTextInputValue(`user_input`);
-            console.log(userInput)
+            //console.log(userInput)
             if (!fs.existsSync(`./songs/${userInput}.mp3`)) {
                 return;          
             }      
@@ -247,21 +282,25 @@ async execute(interaction) {
             while (songs.get(`${interaction.guild.id}-${loop}`)) {
                 loop++;
             }
+            if (songs.get(`${interaction.guild.id}-${loop-1}`) === userInput) return;
             songs.set(`${interaction.guild.id}-${loop}`, userInput);
+            
             if (player.state.status === "idle") {
                 resource = createAudioResource(`./songs/${userInput}.mp3`);
                 player.play(resource);
                 queue.set(interaction.guild.id, 1);
-                
             }
-            
+            updateEmbed();
         });
+        
     }   
 
         interaction.client.on('interactionCreate', async (modalInteraction) => {
             if (!modalInteraction.isModalSubmit() || modalInteraction.customId !== `input_modal`) return;
             if (modalInteraction.user.id !== interaction.user.id) return;
-            const userInput = modalInteraction.fields.getTextInputValue(`user_input`);    
+            const userInput = modalInteraction.fields.getTextInputValue(`user_input`);   
+
+             
             if (!fs.existsSync(`./songs/${userInput}.mp3`)) {
                 
                 return interaction.followUp({
@@ -270,27 +309,13 @@ async execute(interaction) {
                 });
             }
 
-            if (loops.get(interaction.guild.id)) {
-                var loop = "Disable Loop";
-                var style = ButtonStyle.Danger;           
-            } else {
-                var loop = "Loop";
-                var style = ButtonStyle.Primary;
-            }
-            desc = (`Playing: ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)}\nLoop: ${loops.get(interaction.guild.id) ? 'enabled' : 'disabled'}`);
-            footer = { text: `Song ${queue.get(interaction.guild.id)} of ${songs.size}` };
-            updateEmbed(loop, style, desc, footer, msg);
+            updateEmbed();
+            
         });
 
         } catch(error){
             console.log(error);
             interaction.reply({ content: 'An error occurred while executing the command.1'});
         }
-         
-}   )();
-        
-
-        
-    }
-
-}
+    })();      
+}}
