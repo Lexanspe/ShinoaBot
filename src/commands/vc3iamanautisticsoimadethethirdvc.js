@@ -8,6 +8,8 @@ const activeCollectors = new Map();
 const guildPlayers = new Map();
 const msgs = new Map();
 const loops = new Map();
+const modals = new Map();
+const stackFix = new Map();
 
 
 module.exports = {
@@ -16,8 +18,8 @@ data: new SlashCommandBuilder()
 .setName('idunno'),
 
 async execute(interaction) {
-
-
+    
+ 
 
     async function updateEmbed() {
         let msg = msgs.get(interaction.guild.id);
@@ -34,7 +36,7 @@ async execute(interaction) {
             row = new ActionRowBuilder()
             .addComponents(
                 new ButtonBuilder()
-                    .setCustomId(`open_modal`)
+                    .setCustomId(`open_modal${stackFix.get(interaction.guild.id)}`)
                     .setLabel('Choose a song')
                     .setStyle(ButtonStyle.Primary)
             ).addComponents(
@@ -54,7 +56,7 @@ async execute(interaction) {
             row = new ActionRowBuilder()
             .addComponents(
                 new ButtonBuilder()
-                    .setCustomId(`open_modal`)
+                    .setCustomId(`open_modal${stackFix.get(interaction.guild.id)}`)
                     .setLabel('Choose a song')
                     .setStyle(ButtonStyle.Primary)
             ).addComponents(
@@ -106,8 +108,8 @@ async execute(interaction) {
     
     if (msgs.has(interaction.guild.id)) {
         const oldMsg = msgs.get(interaction.guild.id);
-        //oldMsg.delete();
-        //msgs.delete(interaction.guild.id);
+        oldMsg.delete();
+        msgs.delete(interaction.guild.id);
     }
 
     member = await interaction.guild.members.fetch(interaction.user.id);
@@ -115,6 +117,7 @@ async execute(interaction) {
 
     if (!guildPlayers.has(interaction.guild.id)) {
         player = createAudioPlayer();
+        guildPlayers.set(interaction.guild.id, player);
 
         if (channel) {
             connection = joinVoiceChannel({
@@ -125,7 +128,7 @@ async execute(interaction) {
             await connection.subscribe(player);
  
             player.on("stateChange", (oldOne, newOne) => {
-                console.log(oldOne.status, newOne.status);
+                console.log(oldOne.status, newOne.status, stackFix.get(interaction.guild.id));
                 if (oldOne.status === "playing" && newOne.status === "idle") {
                     if (loops.get(interaction.guild.id)) {
                         queue.set(interaction.guild.id, queue.get(interaction.guild.id) - 1);
@@ -149,6 +152,10 @@ async execute(interaction) {
         }
     }
 
+    const time = Date.now();
+    console.log("time has been updated:", time);
+    stackFix.set(interaction.guild.id, time);
+
     if (!songs.get(`${interaction.guild.id}-1`)) {
         var desc = `No song is currently playing.`
         var loop = "Loop";
@@ -157,7 +164,7 @@ async execute(interaction) {
         row = new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()
-                .setCustomId(`open_modal`)
+                .setCustomId(`open_modal${time}`)
                 .setLabel('Choose a song')
                 .setStyle(ButtonStyle.Primary)
         ).addComponents(
@@ -184,7 +191,7 @@ async execute(interaction) {
         row = new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()
-                .setCustomId(`open_modal`)
+                .setCustomId(`open_modal${time}`)
                 .setLabel('Choose a song')
                 .setStyle(ButtonStyle.Primary)
         ).addComponents(
@@ -224,26 +231,35 @@ async execute(interaction) {
             interaction.followUp({ content: 'Collector timed out. You can call the command again by using /idunno', ephemeral: true });
         }
         activeCollectors.delete(interaction.guild.id);
-        
     });
+
+    
     
     collector.on('collect', async (buttonInteraction) => {
-        if (buttonInteraction.customId === `open_modal`) {
-        const modal = new ModalBuilder()
-            .setCustomId(`input_modal`)
-            .setTitle('Choose a song');
+        console.log(time);
+        console.log(`open_modal${time}`);
+        console.log(buttonInteraction.customId);
+        if (buttonInteraction.customId === `open_modal${time}`) {
+            console.log("open modalsaas")
 
-        const textInput = new TextInputBuilder()
-            .setCustomId(`user_input`)
-            .setLabel('Your choice')
-            .setStyle(TextInputStyle.Short)
-            .setPlaceholder('Type something here...')
-            .setRequired(true);
+            const uniqueModalId = `input_modal_${time}`;
 
-        const modalRow = new ActionRowBuilder().addComponents(textInput);
-        modal.addComponents(modalRow);
+            const modal = new ModalBuilder()
+                .setCustomId(uniqueModalId)
+                .setTitle('Choose a song');
 
-        await buttonInteraction.showModal(modal);
+            const textInput = new TextInputBuilder()
+                .setCustomId('user_input')
+                .setLabel('Your choice')
+                .setStyle(TextInputStyle.Short)
+                .setPlaceholder('Enter the name of the song.')
+                .setRequired(true);
+
+            const modalRow = new ActionRowBuilder().addComponents(textInput);
+            modal.addComponents(modalRow);
+
+            modals.set(interaction.guild.id, modal);
+            await buttonInteraction.showModal(modals.get(interaction.guild.id));
         } else if (buttonInteraction.customId === `loop`) {
             if (loops.get(interaction.guild.id)) {
                 loops.delete(interaction.guild.id);  
@@ -264,54 +280,47 @@ async execute(interaction) {
             guildPlayers.delete(interaction.guild.id);
             collector.stop("quit");
             deleteQueue(interaction);
+            modals.delete(interaction.guild.id);
             return interaction.editReply({ content: 'Disconnected from the voice channel.', embeds: [], components: [] });
         }
     });
 
     //modal interaction
-    if (!guildPlayers.has(interaction.guild.id)) { 
-        interaction.client.on('interactionCreate', async (modalInteraction) => {
-            if (!modalInteraction.isModalSubmit() || modalInteraction.customId !== `input_modal`) return;
-            guildPlayers.set(interaction.guild.id, player);
-            const userInput = modalInteraction.fields.getTextInputValue(`user_input`);
-            //console.log(userInput)
-            if (!fs.existsSync(`./songs/${userInput}.mp3`)) {
-                return;          
-            }      
-            let loop = 1;
-            while (songs.get(`${interaction.guild.id}-${loop}`)) {
-                loop++;
-            }
-            if (songs.get(`${interaction.guild.id}-${loop-1}`) === userInput) return;
-            songs.set(`${interaction.guild.id}-${loop}`, userInput);
-            
-            if (player.state.status === "idle") {
-                resource = createAudioResource(`./songs/${userInput}.mp3`);
-                player.play(resource);
-                queue.set(interaction.guild.id, 1);
-            }
-            updateEmbed();
-        });
+
+    interaction.client.on('interactionCreate', async (modalInteraction) => {
+        console.log("modal interaction")
+        if (!modalInteraction.isModalSubmit()) return;
+        console.log("modal interaction2")
+        if (!modalInteraction.customId.startsWith(`input_modal_${time}`)) return;
+        console.log("modal interaction3")
+    
+        const userInput = modalInteraction.fields.getTextInputValue('user_input');
+        const guildId = modalInteraction.guildId;
+        const filePath = `./songs/${userInput}.mp3`;
+    
+        if (!fs.existsSync(filePath)) return modalInteraction.reply({ content: `"${userInput}" mevcut değil.`, ephemeral: true });
+    
+        let loop = 1;
+        while (songs.get(`${guildId}-${loop}`)) {
+            loop++;
+        }
+    
+        songs.set(`${guildId}-${loop}`, userInput);
+    
+        const player = guildPlayers.get(guildId);
+        if (!player) return;
+    
+        if (player.state.status === "idle") {
+            const resource = createAudioResource(filePath);
+            player.play(resource);
+            queue.set(guildId, 1);
+        }
+    
+        updateEmbed();
+    });
+    
         
-    }   
-
-        interaction.client.on('interactionCreate', async (modalInteraction) => {
-            if (!modalInteraction.isModalSubmit() || modalInteraction.customId !== `input_modal`) return;
-            if (modalInteraction.user.id !== interaction.user.id) return;
-            const userInput = modalInteraction.fields.getTextInputValue(`user_input`);   
-
-             
-            if (!fs.existsSync(`./songs/${userInput}.mp3`)) {
                 
-                return interaction.followUp({
-                    content: `"${userInput}" mevcut değil.`,
-                    ephemeral: true,
-                });
-            }
-
-            updateEmbed();
-            
-        });
 
         } catch(error){
             console.log(error);

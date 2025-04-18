@@ -28,9 +28,9 @@ console.log(`[WARNING] The command at ${filePath} is missing a required "data" o
 
 client.once(Events.ClientReady, readyClient => { 
 console.log(`Ready! Logged in as ${readyClient.user.tag}`);
-readyClient.user.setActivity(`sürüm beta 0.2 | ${readyClient.guilds.cache.map(g => g.name).length} sunucuda!`);
+readyClient.user.setActivity(`sürüm beta 1.0 | ${readyClient.guilds.cache.map(g => g.name).length} sunucuda!`);
 setInterval(() => {
-readyClient.user.setActivity(`sürüm beta 0.2 | ${readyClient.guilds.cache.map(g => g.name).length} sunucuda!`);
+readyClient.user.setActivity(`sürüm beta 1.0 | ${readyClient.guilds.cache.map(g => g.name).length} sunucuda!`);
 }, 60000);
 });
 
