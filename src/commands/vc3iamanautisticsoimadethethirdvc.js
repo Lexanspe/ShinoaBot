@@ -6,6 +6,7 @@ const songs = new Map();
 const queue = new Map();
 const activeCollectors = new Map();
 const guildPlayers = new Map();
+const guildConnections = new Map();
 const msgs = new Map();
 const loops = new Map();
 const modals = new Map();
@@ -52,7 +53,8 @@ async execute(interaction) {
             )
         } else {
             desc = (`Playing: ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)}\nLoop: ${loops.get(interaction.guild.id) ? 'enabled' : 'disabled'}`);
-            footer = `Song ${queue.get(interaction.guild.id)} of ${songs.size}`;
+            const guildSongs = Array.from(songs.keys()).filter(key => key.startsWith(`${interaction.guild.id}-`));
+            footer = `Song ${queue.get(interaction.guild.id)} of ${guildSongs.length}`
             row = new ActionRowBuilder()
             .addComponents(
                 new ButtonBuilder()
@@ -86,7 +88,7 @@ async execute(interaction) {
         await msg.edit({ embeds: [embed], components: [row] });        
     }
 
-    async function deleteQueue(interaction) {
+    async function deleteQueue() {
         for (let i = 1; i; i++) {
             if (!songs.get(`${interaction.guild.id}-${i}`)) {
                 break;
@@ -116,8 +118,7 @@ async execute(interaction) {
     channel = member.voice.channel;
 
     if (!guildPlayers.has(interaction.guild.id)) {
-        player = createAudioPlayer();
-        guildPlayers.set(interaction.guild.id, player);
+        
 
         if (channel) {
             connection = joinVoiceChannel({
@@ -125,9 +126,12 @@ async execute(interaction) {
                 guildId: interaction.guild.id,
                 adapterCreator: interaction.guild.voiceAdapterCreator,
             });
+            player = createAudioPlayer();
+            guildPlayers.set(interaction.guild.id, player);
+            guildConnections.set(interaction.guild.id, connection);
             await connection.subscribe(player);
  
-            player.on("stateChange", (oldOne, newOne) => {
+            guildPlayers.get(interaction.guild.id).on("stateChange", (oldOne, newOne) => {
                 console.log(oldOne.status, newOne.status, stackFix.get(interaction.guild.id));
                 if (oldOne.status === "playing" && newOne.status === "idle") {
                     if (loops.get(interaction.guild.id)) {
@@ -136,13 +140,13 @@ async execute(interaction) {
 
                     if (songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 1}`)) {
                         resource = createAudioResource(`./songs/${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 1}`)}.mp3`);
-                        player.play(resource);
+                        guildPlayers.get(interaction.guild.id).play(resource);
                         queue.set(interaction.guild.id, queue.get(interaction.guild.id) + 1);
                         updateEmbed();
                     } else {
-                        player.stop();
+                        guildPlayers.get(interaction.guild.id).stop();
                         queue.delete(interaction.guild.id);                                              
-                        deleteQueue(interaction);
+                        deleteQueue();
                         updateEmbed();
                     }                    
                 }
@@ -269,17 +273,18 @@ async execute(interaction) {
             updateEmbed();
 
         } else if (buttonInteraction.customId === `skip`) {
-            player.stop();
+            guildPlayers.get(interaction.guild.id).stop();
             if (loops.get(interaction.guild.id)) {
                 queue.set(interaction.guild.id, queue.get(interaction.guild.id) + 1);     
             }
             updateEmbed();
         } else if (buttonInteraction.customId === `quit`) {
-            player.stop();
-            connection.destroy();
+            guildPlayers.get(interaction.guild.id).stop();
+            guildConnections.get(interaction.guild.id).destroy();
             guildPlayers.delete(interaction.guild.id);
+            guildConnections.delete(interaction.guild.id);
             collector.stop("quit");
-            deleteQueue(interaction);
+            deleteQueue();
             modals.delete(interaction.guild.id);
             return interaction.editReply({ content: 'Disconnected from the voice channel.', embeds: [], components: [] });
         }
