@@ -10,6 +10,17 @@ const client = new Client({ intents: [
     IntentsBitField.Flags.GuildVoiceStates
 ] });
 
+developerCommand = require('./commands/developer').getDevelopmentMode();
+
+async function clientStatus() {
+        if (developerCommand) {
+            client.user.setActivity(`in development mode`);
+        } else {
+            client.user.setActivity(`beta v1.1 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
+        }
+    }
+
+
 client.cooldowns = new Collection();
 client.commands = new Collection();
 const commandsPath = path.join(__dirname, 'commands');
@@ -28,15 +39,17 @@ console.log(`[WARNING] The command at ${filePath} is missing a required "data" o
 
 client.once(Events.ClientReady, readyClient => { 
 console.log(`Ready! Logged in as ${readyClient.user.tag}`);
-readyClient.user.setActivity(`sürüm beta 1.0 | ${readyClient.guilds.cache.map(g => g.name).length} sunucuda!`);
-setInterval(() => {
-readyClient.user.setActivity(`sürüm beta 1.0 | ${readyClient.guilds.cache.map(g => g.name).length} sunucuda!`);
-}, 60000);
+clientStatus();
+
+
+
 });
+
 
 client.on(Events.InteractionCreate, async interaction => {
 if (!interaction.isChatInputCommand()) return;
 const command = client.commands.get(interaction.commandName);
+//console.log(command)
 
 if (!command) {
 console.error(`No command matching ${interaction.commandName} was found.`);
@@ -67,7 +80,13 @@ timestamps.set(interaction.user.id, now);
 setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
 
 try {
-await command.execute(interaction);
+    
+developerCommand = require('./commands/developer').getDevelopmentMode();
+
+if (interaction.user.id != process.env.OWNERID && developerCommand) return interaction.reply({ content: 'im in currently development mode', ephemeral: true });
+await command.execute(interaction, client);
+
+
 } catch (error) {
 console.error(error);
 if (interaction.replied || interaction.deferred) {
