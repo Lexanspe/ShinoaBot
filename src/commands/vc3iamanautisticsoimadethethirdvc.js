@@ -20,8 +20,6 @@ data: new SlashCommandBuilder()
 
 async execute(interaction) {
     
- 
-
     async function updateEmbed() {
         let msg = msgs.get(interaction.guild.id);
         if (loops.get(interaction.guild.id)) {  
@@ -117,10 +115,9 @@ async execute(interaction) {
     member = await interaction.guild.members.fetch(interaction.user.id);
     channel = member.voice.channel;
 
-    if (!guildPlayers.has(interaction.guild.id)) {
+    if (channel) {
         
-
-        if (channel) {
+        if (!guildPlayers.has(interaction.guild.id)) {
             connection = joinVoiceChannel({
                 channelId: channel.id,
                 guildId: interaction.guild.id,
@@ -151,13 +148,13 @@ async execute(interaction) {
                     }                    
                 }
             })        
-        } else {
-            return interaction.reply({ content: 'You need to be in a voice channel to use this command.', ephemeral: true });
-        }
+        } 
+    } else {
+        return interaction.reply({ content: 'You need to be in a voice channel to use this command.', ephemeral: true });
     }
 
     const time = Date.now();
-    console.log("time has been updated:", time);
+    //console.log("time has been updated:", time);
     stackFix.set(interaction.guild.id, time);
 
     if (!songs.get(`${interaction.guild.id}-1`)) {
@@ -236,15 +233,11 @@ async execute(interaction) {
         }
         activeCollectors.delete(interaction.guild.id);
     });
-
-    
     
     collector.on('collect', async (buttonInteraction) => {
-        console.log(time);
-        console.log(`open_modal${time}`);
-        console.log(buttonInteraction.customId);
+        if (!buttonInteraction.member.voice.channel) return buttonInteraction.reply({ content: 'You need to be in a voice channel to use this command.', ephemeral: true });
         if (buttonInteraction.customId === `open_modal${time}`) {
-            console.log("open modalsaas")
+            //console.log("open modalsaas")
 
             const uniqueModalId = `input_modal_${time}`;
 
@@ -293,11 +286,8 @@ async execute(interaction) {
     //modal interaction
 
     interaction.client.on('interactionCreate', async (modalInteraction) => {
-        console.log("modal interaction")
         if (!modalInteraction.isModalSubmit()) return;
-        console.log("modal interaction2")
         if (!modalInteraction.customId.startsWith(`input_modal_${time}`)) return;
-        console.log("modal interaction3")
     
         const userInput = modalInteraction.fields.getTextInputValue('user_input');
         const guildId = modalInteraction.guildId;
@@ -311,6 +301,7 @@ async execute(interaction) {
         }
     
         songs.set(`${guildId}-${loop}`, userInput);
+        console.log(songs.get(`${guildId}-${loop}`));
     
         const player = guildPlayers.get(guildId);
         if (!player) return;
@@ -323,9 +314,6 @@ async execute(interaction) {
     
         updateEmbed();
     });
-    
-        
-                
 
         } catch(error){
             console.log(error);
