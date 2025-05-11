@@ -12,9 +12,6 @@ data: new SlashCommandBuilder()
             .setRequired(true)),
 async execute(interaction) {
         //ses kısmı
-        let member = await interaction.guild.members.fetch(interaction.user.id);
-        let channel = member.voice.channel;
-        let player = createAudioPlayer();
         //ses kısmı
         const soru = interaction.options.getString('soru')
         if (soru == "") return interaction.reply("Soru sormadın ki cevaplayayım?")
@@ -26,7 +23,7 @@ async execute(interaction) {
             case 2: cevap = "hell na bro wtf"; break; //olumsuz
             case 3: cevap = "fr"; break; //olumlu
             case 4: cevap = "i dont think so"; break; //olumsuz
-            case 5: cevap = "mayyybee"; break; //kararsız
+            case 5: cevap = "cant know without trying tbh"; break; //kararsız
             case 6: cevap = "i dunno"; break; //kararsız
             case 7: cevap = "probably, i guess"; break; //olumlu
             case 8: cevap = "it wont be happening"; break; //olumsuz
@@ -41,43 +38,9 @@ async execute(interaction) {
             case 17: cevap = "<a:plankton:1345420014450249808>"; break; //olumsuz
             default: cevap = "im not sure"; break; //kararsız
         } //olumlu = 7, olumsuz = 7, kararsız = 4
-        if (soru == "do you have any ibuprofen" | soru == "bilgisayar bana hemen fantastik ipneleri yolla" | soru == "i got a headache"){
-            cevap = "i got a headache";
-            if (soru == "bilgisayar bana hemen fantastik ipneleri yolla") {
-                cevap = "tabi efendim";
-            }
-            else if (soru == "i got a headache") {
-                cevap = "do you have any ibuprofen";
-            }
-            if (channel) {
-                connection = await joinVoiceChannel({
-                    channelId: channel.id,
-                    guildId: interaction.guild.id,
-                    adapterCreator: interaction.guild.voiceAdapterCreator,
-                  });
-                await connection.subscribe(player);
-                resource = createAudioResource(`./songs/headache.mp3`);
-                if (soru == "bilgisayar bana hemen fantastik ipneleri yolla") {
-                    resource = createAudioResource(`./songs/fantastik.mp3`);
-                }
-                else if (soru == "i got a headache") {
-                    resource = createAudioResource(`./songs/ibuprofen.mp3`);
-                }
-                player.play(resource);
-                player.addListener("stateChange", (oldOne, newOne) => {
-                    console.log(oldOne.status, newOne.status);
-                    if (oldOne.status == "playing" && newOne.status === "idle") {
-
-            
-                        connection.destroy();
-                        //i.update({ content: "Ses kanalından ayrıldım. <:nice:1076907398264004709>", embeds: [], components: [] });
-
-                        //interaction.followUp("Ses kanalından ayrıldım. <:nice:1076907398264004709>");
-
-                        return;
-                    }
-                })
-            }
+        if (soru == "hoo") {
+            await interaction.reply("https://tenor.com/view/abdulhamit-gif-26190368");
+            return;
         }
         const embed = new EmbedBuilder()
             .setTitle("Sihirli 8 Topu")
