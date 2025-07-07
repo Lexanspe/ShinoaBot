@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('discord.js');
 
-let developmentMode = false;
+let developmentMode = true;
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -20,8 +20,8 @@ async execute(interaction, client) {
             client.user.setActivity(`beta v1.1 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
         }
     }
-    if (interaction.user.id != process.env.OWNERID) {
-        return interaction.reply({ content: "you are not a developer. are you?", ephemeral: true });
+    if (interaction.user.id != process.env.OWNERID && interaction.user.id != process.env.DEV1) {
+        return;
     }
 
     const devMode = interaction.options.getBoolean('dev');
@@ -33,10 +33,10 @@ async execute(interaction, client) {
         return interaction.reply({ content: "I'm already in normal mode", ephemeral: true });
     } else if (devMode && !developmentMode) {
         developmentMode = true;
-        interaction.reply({ content: "Switched to development mode", ephemeral: true });
+        interaction.reply({ content: "Switched to development mode", ephemeral: false });
     } else if (!devMode && developmentMode) {
         developmentMode = false;
-        interaction.reply({ content: "Switched to normal mode", ephemeral: true });
+        interaction.reply({ content: "Switched to normal mode", ephemeral: false });
     }
     clientStatus();
 

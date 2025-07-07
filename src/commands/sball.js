@@ -16,7 +16,7 @@ async execute(interaction) {
         const soru = interaction.options.getString('soru')
         if (soru == "") return interaction.reply("Soru sormadın ki cevaplayayım?")
         if (soru.length > 1000) return interaction.reply("Yazdığın soru çok uzun, hiçbir şey anlamadım kısaltır mısın?")
-        var sayi = Math.ceil(Math.random() * 18);
+        var sayi = Math.ceil(Math.random() * 19);
         var cevap;
         switch (sayi) {
             case 1: cevap = "yepp"; break; //olumlu
@@ -36,8 +36,9 @@ async execute(interaction) {
             case 15: cevap = "its a solid \"True\""; break;  //olumlu
             case 16: cevap = "i mean, yeah"; break;  //olumlu
             case 17: cevap = "<a:plankton:1345420014450249808>"; break; //olumsuz
+            case 18: cevap = "🥀"; break; //olumsuz
             default: cevap = "im not sure"; break; //kararsız
-        } //olumlu = 7, olumsuz = 7, kararsız = 4
+        } //olumlu = 7, olumsuz = 8, kararsız = 4
         if (soru == "hoo") {
             await interaction.reply("https://tenor.com/view/abdulhamit-gif-26190368");
             return;

@@ -1,4 +1,5 @@
 require("dotenv").config();
+console.log(process.env.TOKEN);
 const fs = require('node:fs');
 const path = require('node:path');
 const { Client, Collection, Events, IntentsBitField } = require('discord.js');
@@ -80,10 +81,18 @@ timestamps.set(interaction.user.id, now);
 setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
 
 try {
-    
+
 developerCommand = require('./commands/developer').getDevelopmentMode();
 
-if (interaction.user.id != process.env.OWNERID && developerCommand) return interaction.reply({ content: 'im in currently development mode', ephemeral: true });
+if (interaction.user.id != process.env.OWNERID && interaction.user.id != process.env.DEV1 && (interaction.commandName == "developer" || interaction.commandName == "setbanner")) {
+    console.log(`${interaction.member.nickname}(${interaction.user.username}) tried to use "${interaction.commandName}" command`);
+    return interaction.reply({ content: "you are not a developer. are you?", ephemeral: true });
+}
+
+else if (interaction.user.id != process.env.OWNERID && interaction.user.id != process.env.DEV1 && developerCommand) {
+    console.log(`${interaction.member.nickname}(${interaction.user.username}) tried to use "${interaction.commandName}" command while in development mode.`);
+    return interaction.reply({ content: 'im currently in development mode', ephemeral: true });
+}   
 await command.execute(interaction, client);
 
 

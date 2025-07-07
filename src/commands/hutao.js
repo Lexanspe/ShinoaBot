@@ -1,5 +1,5 @@
 require("dotenv").config();
-const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder } = require("discord.js");
+const { SlashCommandBuilder } = require("discord.js");
 
 
 
@@ -11,8 +11,6 @@ module.exports = {
     
     async execute(interaction) { 
         interaction.reply("alperenin hu taosu var");
-        interaction.channel.send("<a:plankton:1345420014450249808>");
+        //interaction.channel.send("<a:plankton:1345420014450249808>");
     }
-
-
 };
