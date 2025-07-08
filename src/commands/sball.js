@@ -4,7 +4,7 @@ const { joinVoiceChannel, createAudioPlayer, createAudioResource } = require('@d
 module.exports = {
     cooldown: 1,
 data: new SlashCommandBuilder()
-.setName('nehir')
+.setName('sball')
 .setDescription("Sihirli 8 Topu'na soru sorar.")                      
     .addStringOption(option => 
         option.setName('soru')
