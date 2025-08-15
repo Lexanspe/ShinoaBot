@@ -16,7 +16,8 @@ const stackFix = new Map();
 module.exports = {
     cooldown: 1,
 data: new SlashCommandBuilder()
-.setName('idunno'),
+.setName('idunno')
+.setDescription('ses işte ya'),
 
 async execute(interaction) {
     
@@ -32,7 +33,7 @@ async execute(interaction) {
         if (!songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)) {
             var desc = `No song is currently playing.`
             var footer = `No song in playlist`;
-            row = new ActionRowBuilder()
+            var row = new ActionRowBuilder() // var eklendi
             .addComponents(
                 new ButtonBuilder()
                     .setCustomId(`open_modal${stackFix.get(interaction.guild.id)}`)
@@ -53,7 +54,7 @@ async execute(interaction) {
             desc = (`Playing: ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)}\nLoop: ${loops.get(interaction.guild.id) ? 'enabled' : 'disabled'}`);
             const guildSongs = Array.from(songs.keys()).filter(key => key.startsWith(`${interaction.guild.id}-`));
             footer = `Song ${queue.get(interaction.guild.id)} of ${guildSongs.length}`
-            row = new ActionRowBuilder()
+            var row = new ActionRowBuilder() // var eklendi
             .addComponents(
                 new ButtonBuilder()
                     .setCustomId(`open_modal${stackFix.get(interaction.guild.id)}`)
@@ -78,7 +79,7 @@ async execute(interaction) {
         }
  
         
-        embed = new EmbedBuilder() 
+        var embed = new EmbedBuilder()  // var eklendi
             .setColor('#54007f')
             .setTitle('idunno')
             .setDescription(desc)
@@ -136,7 +137,7 @@ async execute(interaction) {
                     }
 
                     if (songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 1}`)) {
-                        resource = createAudioResource(`./songs/${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 1}`)}.mp3`);
+                        resource = createAudioResource(`src/songs/${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 1}`)}.mp3`);
                         guildPlayers.get(interaction.guild.id).play(resource);
                         queue.set(interaction.guild.id, queue.get(interaction.guild.id) + 1);
                         updateEmbed();
@@ -162,7 +163,7 @@ async execute(interaction) {
         var loop = "Loop";
         var style = ButtonStyle.Primary;
         var footer = { text: `No song in playlist` }; 
-        row = new ActionRowBuilder()
+        var row = new ActionRowBuilder() // var eklendi
         .addComponents(
             new ButtonBuilder()
                 .setCustomId(`open_modal${time}`)
@@ -189,7 +190,7 @@ async execute(interaction) {
             var loop = "Loop";
             var style = ButtonStyle.Primary;
         }
-        row = new ActionRowBuilder()
+        var row = new ActionRowBuilder() // var eklendi
         .addComponents(
             new ButtonBuilder()
                 .setCustomId(`open_modal${time}`)
@@ -213,7 +214,7 @@ async execute(interaction) {
         )
 
     }
-    embed = new EmbedBuilder()
+    var embed = new EmbedBuilder() // var eklendi
         .setColor('#54007f')
         .setTitle('idunno')
         .setDescription(desc)
@@ -258,20 +259,27 @@ async execute(interaction) {
             modals.set(interaction.guild.id, modal);
             await buttonInteraction.showModal(modals.get(interaction.guild.id));
         } else if (buttonInteraction.customId === `loop`) {
+            buttonInteraction.deferUpdate(); // Discord'a yanıt ver
+            
             if (loops.get(interaction.guild.id)) {
                 loops.delete(interaction.guild.id);  
             } else {
                 loops.set(interaction.guild.id, true);
             }
+
             updateEmbed();
 
         } else if (buttonInteraction.customId === `skip`) {
+            buttonInteraction.deferUpdate(); // Discord'a yanıt ver
+            
             guildPlayers.get(interaction.guild.id).stop();
             if (loops.get(interaction.guild.id)) {
                 queue.set(interaction.guild.id, queue.get(interaction.guild.id) + 1);     
             }
             updateEmbed();
         } else if (buttonInteraction.customId === `quit`) {
+            buttonInteraction.deferUpdate(); // Discord'a yanıt ver
+            
             guildPlayers.get(interaction.guild.id).stop();
             guildConnections.get(interaction.guild.id).destroy();
             guildPlayers.delete(interaction.guild.id);
@@ -283,17 +291,39 @@ async execute(interaction) {
         }
     });
 
-    //modal interaction
 
-    interaction.client.on('interactionCreate', async (modalInteraction) => {
-        if (!modalInteraction.isModalSubmit()) return;
-        if (!modalInteraction.customId.startsWith(`input_modal_${time}`)) return;
+    //modal interaction - DEBUG ve düzeltme
+    const modalHandler = async (modalInteraction) => {
+        console.log('Modal interaction received:', modalInteraction.customId, modalInteraction.user.id);
+        
+        if (!modalInteraction.isModalSubmit()) {
+            console.log('Not a modal submit');
+            return;
+        }
+        
+        if (!modalInteraction.customId.startsWith(`input_modal_${time}`)) {
+            console.log('Modal ID mismatch:', modalInteraction.customId, `input_modal_${time}`);
+            return;
+        }
+        
+        if (modalInteraction.user.id !== interaction.user.id) {
+            console.log('User ID mismatch');
+            return;
+        }
     
+        console.log('Modal validation passed, processing...');
+        
         const userInput = modalInteraction.fields.getTextInputValue('user_input');
         const guildId = modalInteraction.guildId;
-        const filePath = `./songs/${userInput}.mp3`;
+        const filePath = `src/songs/${userInput}.mp3`;
+        
+        console.log('User input:', userInput);
+        console.log('File path:', filePath);
     
-        if (!fs.existsSync(filePath)) return modalInteraction.reply({ content: `"${userInput}" mevcut değil.`, ephemeral: true });
+        if (!fs.existsSync(filePath)) {
+            console.log('File not found:', filePath);
+            return modalInteraction.reply({ content: `"${userInput}" mevcut değil.`, ephemeral: true });
+        }
     
         let loop = 1;
         while (songs.get(`${guildId}-${loop}`)) {
@@ -301,7 +331,7 @@ async execute(interaction) {
         }
     
         songs.set(`${guildId}-${loop}`, userInput);
-        console.log(songs.get(`${guildId}-${loop}`));
+        console.log(`Added song: ${songs.get(`${guildId}-${loop}`)}`);
     
         const player = guildPlayers.get(guildId);
         if (!player) return;
@@ -313,6 +343,19 @@ async execute(interaction) {
         }
     
         updateEmbed();
+        modalInteraction.reply({ content: `"${userInput}" başarıyla eklendi!`, ephemeral: true });
+        
+        // Handler'ı temizle - Memory leak önle
+        interaction.client.off('interactionCreate', modalHandler);
+    };
+
+    // ON kullan ama manuel cleanup ile
+    interaction.client.on('interactionCreate', modalHandler);
+    
+    // Collector bittiğinde modal handler'ı da temizle
+    collector.on('end', () => {
+        interaction.client.off('interactionCreate', modalHandler);
+        console.log('Collector ended, modal handler cleaned up');
     });
 
         } catch(error){

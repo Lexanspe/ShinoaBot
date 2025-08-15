@@ -1,6 +1,7 @@
 const { SlashCommandBuilder } = require('discord.js');
 
 let developmentMode = false;
+let statusInterval; // Interval referansını saklamak için
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -13,14 +14,7 @@ module.exports = {
 
 async execute(interaction, client) {
 
-    async function clientStatus() {
-        if (developmentMode) {
-            client.user.setActivity(`in development mode`);
-        } else {
-            client.user.setActivity(`beta v1.1 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
-        }
-    }
-    if (interaction.user.id != process.env.OWNERID && interaction.user.id != process.env.DEV1) {
+    if (interaction.user.id != process.env.OWNERID && interaction.user.id != process.env.DEV) {
         return;
     }
 
@@ -38,12 +32,42 @@ async execute(interaction, client) {
         developmentMode = false;
         interaction.reply({ content: "Switched to normal mode", ephemeral: false });
     }
-    clientStatus();
-
-
+    
+    // Status güncelleme
+    this.updateClientStatus(client);
 
 },
 
- getDevelopmentMode: () => developmentMode,
+// Status güncelleme fonksiyonu
+updateClientStatus(client) {
+    // Önceki interval'ı temizle
+    if (statusInterval) clearInterval(statusInterval);
+    
+    if (developmentMode) {
+        client.user.setActivity(`in development mode`);
+        
+        statusInterval = setInterval(() => {
+            client.user.setActivity(`in development mode`);
+        }, 60000);
+    } else {
+        client.user.setActivity(`v1.2 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
+        
+        statusInterval = setInterval(() => {
+            client.user.setActivity(`v1.2 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
+        }, 60000);
+    }
+},
+
+// Developer kontrolü fonksiyonu
+checkDeveloperPermission(userId) {
+    return userId === process.env.OWNERID || userId === process.env.DEV;
+},
+
+// Developer mode kontrolü fonksiyonu  
+checkDeveloperModeRestriction(userId) {
+    return !this.checkDeveloperPermission(userId) && developmentMode;
+},
+
+getDevelopmentMode: () => developmentMode,
 
 };

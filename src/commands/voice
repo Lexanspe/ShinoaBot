@@ -1,0 +1,106 @@
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
+const fs = require('fs');
+const path = require('path');
+
+const guildEmbeds = new Map(); 
+
+module.exports = {
+    data: new SlashCommandBuilder()
+        .setName('voice')
+        .setDescription('Voice channel management commands'),
+
+
+async execute(interaction) {
+
+    // Kullanıcının ses kanalında olup olmadığını kontrol et
+    const userVoiceChannel = interaction.member.voice.channel;
+    
+    if (!userVoiceChannel) {
+        const notInVoiceEmbed = new EmbedBuilder()
+            .setColor('#ff0000')
+            .setTitle('❌ Ses Kanalında Değilsin!')
+            .setDescription('Bu komutu kullanmak için önce bir ses kanalına katılman gerekiyor.')
+            .setFooter({ text: 'ShinoaBot', iconURL: interaction.client.user.displayAvatarURL() })
+            .setTimestamp();
+            
+        return interaction.reply({ embeds: [notInVoiceEmbed], ephemeral: true });
+    }
+
+    async function updateEmbed() {
+
+        embed = new EmbedBuilder()
+            .setColor('#00ff00')
+            .setTitle('🎵 Müzik Çalınıyor!')
+            .setDescription(`**${userVoiceChannel.name}** kanalına katıldım ve müzik çalmaya başladım!`)
+            .addFields(
+                { name: '🔊 Kanal', value: userVoiceChannel.name, inline: true },
+                { name: '👥 Üye Sayısı', value: `${userVoiceChannel.members.size}`, inline: true },
+                { name: '🎵 Çalan Şarkı', value: randomSong.replace('.mp3', ''), inline: false }
+            )
+            .setFooter({ text: 'ShinoaBot', iconURL: interaction.client.user.displayAvatarURL() })
+            .setTimestamp();
+
+        await msg.edit({ embeds: [embed] });
+    }
+
+    try {
+        // Ses kanalına katıl
+        const connection = joinVoiceChannel({
+            channelId: userVoiceChannel.id,
+            guildId: interaction.guild.id,
+            adapterCreator: interaction.guild.voiceAdapterCreator,
+        });
+
+        // Songs klasöründeki dosyaları al
+        const songsPath = path.join(__dirname, '..', 'songs');
+        const songFiles = fs.readdirSync(songsPath).filter(file => file.endsWith('.mp3'));
+        
+        if (songFiles.length === 0) {
+            return interaction.reply({ content: 'Hiç müzik dosyası bulunamadı!', ephemeral: true });
+        }
+     
+        // Audio player ve resource oluştur
+        const player = createAudioPlayer();
+        
+        // Player'ı connection'a subscribe et
+        connection.subscribe(player);
+
+        embed = new EmbedBuilder()
+        .setColor('#54007f')
+        .setTitle('idunno')
+        .setDescription(desc)
+        .setFooter(footer);
+
+        const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
+
+        // Player durumunu izle
+        player.on(AudioPlayerStatus.Playing, () => {
+            console.log(`Playing: ${randomSong} in ${userVoiceChannel.name}`);
+        });
+
+        player.on(AudioPlayerStatus.Idle, () => {
+            console.log(`Finished playing: ${randomSong}`);
+            connection.destroy(); // Şarkı bitince bağlantıyı kes
+        });
+
+        player.on('error', error => {
+            console.error('Audio player error:', error);
+            connection.destroy();
+        });
+
+    } catch (error) {
+        console.error('Voice connection error:', error);
+        
+        const errorEmbed = new EmbedBuilder()
+            .setColor('#ff0000')
+            .setTitle('❌ Hata!')
+            .setDescription('Ses kanalına katılırken veya müzik çalarken bir hata oluştu.')
+            .setFooter({ text: 'ShinoaBot', iconURL: interaction.client.user.displayAvatarURL() })
+            .setTimestamp();
+            
+        return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+    }
+
+}
+};

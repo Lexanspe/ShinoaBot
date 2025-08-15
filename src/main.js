@@ -11,15 +11,7 @@ const client = new Client({ intents: [
     IntentsBitField.Flags.GuildVoiceStates
 ] });
 
-developerCommand = require('./commands/developer').getDevelopmentMode();
-
-async function clientStatus() {
-        if (developerCommand) {
-            client.user.setActivity(`in development mode`);
-        } else {
-            client.user.setActivity(`beta v1.1 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
-        }
-    }
+const developerModule = require('./commands/developer');
 
 
 client.cooldowns = new Collection();
@@ -40,17 +32,14 @@ console.log(`[WARNING] The command at ${filePath} is missing a required "data" o
 
 client.once(Events.ClientReady, readyClient => { 
 console.log(`Ready! Logged in as ${readyClient.user.tag}`);
-clientStatus();
-
-
-
+developerModule.updateClientStatus(client);
 });
 
 
 client.on(Events.InteractionCreate, async interaction => {
 if (!interaction.isChatInputCommand()) return;
 const command = client.commands.get(interaction.commandName);
-//console.log(command)
+
 
 if (!command) {
 console.error(`No command matching ${interaction.commandName} was found.`);
@@ -82,19 +71,13 @@ setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
 
 try {
 
-developerCommand = require('./commands/developer').getDevelopmentMode();
-
-if (interaction.user.id != process.env.OWNERID && interaction.user.id != process.env.DEV1 && (interaction.commandName == "developer" || interaction.commandName == "setbanner")) {
-    console.log(`${interaction.member.nickname}(${interaction.user.username}) tried to use "${interaction.commandName}" command`);
-    return interaction.reply({ content: "you are not a developer. are you?", ephemeral: true });
+// Developer mode restriction kontrolü - eğer development mode açıksa ve kullanıcı developer değilse engelle
+if (developerModule.checkDeveloperModeRestriction(interaction.user.id)) {
+    console.log(`${interaction.member?.nickname || interaction.user.username}(${interaction.user.username}) tried to use "${interaction.commandName}" command while in development mode.`);
+    return interaction.reply({ content: 'Bot şu anda geliştirici modunda. Sadece geliştiriciler komut kullanabilir.', ephemeral: true });
 }
 
-else if (interaction.user.id != process.env.OWNERID && interaction.user.id != process.env.DEV1 && developerCommand) {
-    console.log(`${interaction.member.nickname}(${interaction.user.username}) tried to use "${interaction.commandName}" command while in development mode.`);
-    return interaction.reply({ content: 'im currently in development mode', ephemeral: true });
-}   
 await command.execute(interaction, client);
-
 
 } catch (error) {
 console.error(error);
