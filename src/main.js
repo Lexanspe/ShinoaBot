@@ -1,5 +1,6 @@
 require("dotenv").config();
 console.log(process.env.TOKEN);
+console.log('YouTube API Key:', process.env.YOUTUBE_API_KEY);
 const fs = require('node:fs');
 const path = require('node:path');
 const { Client, Collection, Events, IntentsBitField } = require('discord.js');
@@ -72,7 +73,7 @@ setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
 try {
 
 // Developer mode restriction kontrolü - eğer development mode açıksa ve kullanıcı developer değilse engelle
-if (developerModule.checkDeveloperModeRestriction(interaction.user.id)) {
+if (developerModule.developmentMode && interaction.user.id !== process.env.OWNERID && interaction.user.id !== process.env.DEV) {
     console.log(`${interaction.member?.nickname || interaction.user.username}(${interaction.user.username}) tried to use "${interaction.commandName}" command while in development mode.`);
     return interaction.reply({ content: 'Bot şu anda geliştirici modunda. Sadece geliştiriciler komut kullanabilir.', ephemeral: true });
 }

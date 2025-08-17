@@ -9,6 +9,7 @@ require('dotenv').config();
 const songs = new Map();
 const queue = new Map();
 const activeCollectors = new Map();
+const disabledCollectors = new Map();
 const guildPlayers = new Map();
 const guildConnections = new Map();
 const guildChannels = new Map();
@@ -16,7 +17,7 @@ const msgs = new Map();
 const loops = new Map();
 const modals = new Map();
 const stackFix = new Map();
-const titleToId = new Map(); // Video başlığı -> Video ID mapping
+const titleToId = new Map();
 
 
 module.exports = {
@@ -117,11 +118,13 @@ ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 2}`) &&
             .setDescription(desc)
             .setFooter({ text: `${footer}` });	     
         
-        if (!songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)){
+        if (!songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`) && !disabledCollectors.get(interaction.guild.id)){
         await msg.edit({ embeds: [embed], components: [row] });
-        } else {
+        } else if (songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`) && !disabledCollectors.get(interaction.guild.id)){
         await msg.edit({ embeds: [embed], components: [row, row2] });
-        }    
+        } else {
+        await msg.edit({ content: '**Collector timed out. Use /playyt to refresh the collector.**', embeds: [embed], components: [], fetchReply: true }); 
+        }
         
     }
 
@@ -137,7 +140,6 @@ ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 2}`) &&
         console.log("queue deleted")
     }
     
-    // Hızlı video başlığı alma fonksiyonu (indirmeden)
     async function getYouTubeTitle(videoUrl) {
         try {
             console.log('Video başlığı alınıyor (indirme yok):', videoUrl);
@@ -285,6 +287,16 @@ ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 2}`) &&
 
     (async () => {
         try {
+    member = await interaction.guild.members.fetch(interaction.user.id);
+    channel = member.voice.channel;
+
+    if (!channel) {
+        interaction.reply({ content: 'You must be in a voice channel to use this command.', ephemeral: true });
+        return;
+    } else if (channel !== guildChannels.get(interaction.guild.id) && guildConnections.has(interaction.guild.id)) {
+        interaction.reply({ content: 'You must be in the same voice channel with me to use this command.', ephemeral: true });
+        return;
+    }
 
     if (activeCollectors.has(interaction.guild.id)) {
         const oldCollector = activeCollectors.get(interaction.guild.id);
@@ -296,18 +308,10 @@ ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 2}`) &&
         const oldMsg = msgs.get(interaction.guild.id);
         oldMsg.delete();
         msgs.delete(interaction.guild.id);
+        disabledCollectors.set(interaction.guild.id, false);
     }
 
-    member = await interaction.guild.members.fetch(interaction.user.id);
-    channel = member.voice.channel;
 
-    
-
-    if (channel) {
-        if (channel !== guildChannels.get(interaction.guild.id) && guildConnections.has(interaction.guild.id)) {
-            interaction.reply({ content: 'You must be in the same voice channel with me to use this command.', ephemeral: true });
-            return;
-        }
         if (!guildPlayers.has(interaction.guild.id)) {
             connection = joinVoiceChannel({
                 channelId: channel.id,
@@ -377,9 +381,7 @@ ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 2}`) &&
                 }
             })        
         } 
-    } else {
-        return interaction.reply({ content: 'You need to be in a voice channel to use this command.', ephemeral: true });
-    }
+
     const time = Date.now();
     //console.log("time has been updated:", time);
     stackFix.set(interaction.guild.id, time);
@@ -487,9 +489,11 @@ ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 2}`) &&
     //console.log(activeCollectors.get(interaction.guild.id));
     collector.on('end', (collected, reason) => {
         if (reason === 'time') {
+            msg.edit({ content: '**Collector timed out. Use /playyt to refresh the collector.**', components: [], fetchReply: true });
             interaction.followUp({ content: 'Collector timed out. You can call the command again by using /playyt', ephemeral: true });
         }
         activeCollectors.delete(interaction.guild.id);
+        disabledCollectors.set(interaction.guild.id, true);
     });
     
     collector.on('collect', async (buttonInteraction) => {
@@ -576,6 +580,7 @@ ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 2}`) &&
             
             guildPlayers.get(interaction.guild.id).stop();
             guildConnections.get(interaction.guild.id).destroy();
+            guildChannels.delete(interaction.guild.id);
             guildPlayers.delete(interaction.guild.id);
             guildConnections.delete(interaction.guild.id);
             loops.set(interaction.guild.id, false);
@@ -645,7 +650,7 @@ ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 2}`) &&
             setTimeout(async () => {
                 try {
                     if (!fs.existsSync(`src/ytsongs/${await onlyId(userInput)}.opus`)) {
-                        await modalInteraction.editReply({ content: `I couldn't find "${await getYouTubeTitle(userInput)}" in my database. Wait a moment while I download it.` });
+                        await modalInteraction.editReply({ content: `I couldn't find "${await getYouTubeTitle(userInput)}" in my database. *Wait a moment while I download it.*` });
                     } else {
                         await modalInteraction.deleteReply();
                     }
