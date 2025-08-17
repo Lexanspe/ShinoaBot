@@ -51,9 +51,16 @@ async execute(interaction) {
                     .setStyle(ButtonStyle.Danger)
             )
         } else {
-            desc = (`Playing: ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)}\nLoop: ${loops.get(interaction.guild.id) ? 'enabled' : 'disabled'}`);
-            const guildSongs = Array.from(songs.keys()).filter(key => key.startsWith(`${interaction.guild.id}-`));
-            footer = `Song ${queue.get(interaction.guild.id)} of ${guildSongs.length}`
+            desc = (`Loop: ${loops.get(interaction.guild.id) ? 'enabled' : 'disabled'}\nSong list:\n
+${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) - 2}`) && !songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 1}`) ? `${queue.get(interaction.guild.id) - 2}- ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) - 2}`)}\n` : ''}\
+${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) - 1}`) ? `${queue.get(interaction.guild.id) - 1}- ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) - 1}`)}\n` : ''}\
+**${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`) ? `${queue.get(interaction.guild.id)}- ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)}\n` : ''}**\
+${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 1}`) ? `${queue.get(interaction.guild.id) + 1}- ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 1}`)}\n` : ''}\
+${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 2}`) && !songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) - 1}`) ? `${queue.get(interaction.guild.id) + 2}- ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 2}`)}` : ''}
+            `);
+
+            const gs = Array.from(songs.keys()).filter(key => key.startsWith(`${interaction.guild.id}-`));
+            footer = `Song ${queue.get(interaction.guild.id)} of ${gs.length}`
             var row = new ActionRowBuilder() // var eklendi
             .addComponents(
                 new ButtonBuilder()
@@ -62,20 +69,39 @@ async execute(interaction) {
                     .setStyle(ButtonStyle.Primary)
             ).addComponents(
                 new ButtonBuilder()
+                    .setCustomId(`songlist`)
+                    .setLabel("Song List")
+                    .setStyle(ButtonStyle.Primary)
+            ).addComponents(
+                new ButtonBuilder()
                     .setCustomId(`loop`)
                     .setLabel(loop)
                     .setStyle(style)
-            ).addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`skip`)
-                    .setLabel('Skip')
-                    .setStyle(ButtonStyle.Primary)
             ).addComponents(
                 new ButtonBuilder()
                     .setCustomId(`quit`)
                     .setLabel('Quit')
                     .setStyle(ButtonStyle.Danger)
             )
+            
+            var row2 = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`previous`)
+                    .setLabel("Previous")
+                    .setStyle(ButtonStyle.Primary)
+            ).addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`rewind`)
+                    .setLabel("Rewind")
+                    .setStyle(ButtonStyle.Primary)
+            ).addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`skip`)
+                    .setLabel('Next')
+                    .setStyle(ButtonStyle.Primary)
+            )
+
         }
  
         
@@ -83,8 +109,14 @@ async execute(interaction) {
             .setColor('#54007f')
             .setTitle('idunno')
             .setDescription(desc)
-            .setFooter({ text: `${footer}` });	
-        await msg.edit({ embeds: [embed], components: [row] });        
+            .setFooter({ text: `${footer}` });	     
+        
+        if (!songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)){
+        await msg.edit({ embeds: [embed], components: [row] });
+        } else {
+        await msg.edit({ embeds: [embed], components: [row, row2] });
+        }    
+        
     }
 
     async function deleteQueue() {
@@ -153,7 +185,6 @@ async execute(interaction) {
     } else {
         return interaction.reply({ content: 'You need to be in a voice channel to use this command.', ephemeral: true });
     }
-
     const time = Date.now();
     //console.log("time has been updated:", time);
     stackFix.set(interaction.guild.id, time);
@@ -181,7 +212,13 @@ async execute(interaction) {
                 .setStyle(ButtonStyle.Danger)
         )
     } else {
-        var desc = `Playing: ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)}\nLoop: ${loops.get(interaction.guild.id) ? 'enabled' : 'disabled'}`
+        desc = (`Loop: ${loops.get(interaction.guild.id) ? 'enabled' : 'disabled'}\nSong list:\n
+${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) - 2}`) && !songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 1}`) ? `${queue.get(interaction.guild.id) - 2}- ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) - 2}`)}\n` : ''}\
+${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) - 1}`) ? `${queue.get(interaction.guild.id) - 1}- ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) - 1}`)}\n` : ''}\
+**${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`) ? `${queue.get(interaction.guild.id)}- ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id)}`)}\n` : ''}**\
+${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 1}`) ? `${queue.get(interaction.guild.id) + 1}- ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 1}`)}\n` : ''}\
+${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 2}`) && !songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) - 1}`) ? `${queue.get(interaction.guild.id) + 2}- ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 2}`)}` : ''}
+            `);
         var footer = { text: `Song ${queue.get(interaction.guild.id)} of ${songs.size}` };
         if (loops.get(interaction.guild.id)) {
             var loop = "Disable Loop";
@@ -198,29 +235,54 @@ async execute(interaction) {
                 .setStyle(ButtonStyle.Primary)
         ).addComponents(
             new ButtonBuilder()
+                .setCustomId(`songlist`)
+                .setLabel("Song List")
+                .setStyle(ButtonStyle.Primary)
+        ).addComponents(
+            new ButtonBuilder()
                 .setCustomId(`loop`)
                 .setLabel(loop)
                 .setStyle(style)
-        ).addComponents(
-            new ButtonBuilder()
-                .setCustomId(`skip`)
-                .setLabel('Skip')
-                .setStyle(ButtonStyle.Primary)
         ).addComponents(
             new ButtonBuilder()
                 .setCustomId(`quit`)
                 .setLabel('Quit')
                 .setStyle(ButtonStyle.Danger)
         )
+        
+        var row2 = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId(`previous`)
+                .setLabel("Previous")
+                .setStyle(ButtonStyle.Primary)
+        ).addComponents(
+            new ButtonBuilder()
+                .setCustomId(`rewind`)
+                .setLabel("Rewind")
+                .setStyle(ButtonStyle.Primary)
+        ).addComponents(
+            new ButtonBuilder()
+                .setCustomId(`skip`)
+                .setLabel('Next')
+                .setStyle(ButtonStyle.Primary)
+        )
 
     }
+
     var embed = new EmbedBuilder() // var eklendi
         .setColor('#54007f')
         .setTitle('idunno')
         .setDescription(desc)
         .setFooter(footer);
-    
-    const msg = await interaction.reply({ embeds: [embed], components: [row], fetchReply: true });
+
+
+    if (!songs.get(`${interaction.guild.id}-1`)){
+        var msg = await interaction.reply({ embeds: [embed], components: [row], fetchReply: true });
+        } else {
+        var msg = await interaction.reply({ embeds: [embed], components: [row, row2], fetchReply: true });
+    }   
+
     msgs.set(interaction.guild.id, msg);
     
     //console.log(activeCollectors.entries())
@@ -258,6 +320,40 @@ async execute(interaction) {
 
             modals.set(interaction.guild.id, modal);
             await buttonInteraction.showModal(modals.get(interaction.guild.id));
+
+        } else if(buttonInteraction.customId === `songlist`){
+            // Guild'e ait şarkıları filtrele - numara + isim
+            let songList = Array.from(songs.entries())
+                .filter(([key, value]) => key.startsWith(`${interaction.guild.id}-`))
+                .map(([key, value], index) => `${index + 1}. ${value}`) // Sadece numara ve isim
+                .join('\n');
+
+            buttonInteraction.reply({ 
+                content: `**🎵 Playlist:**\n\n${songList}`, 
+                ephemeral: true 
+            });
+
+        } else if (buttonInteraction.customId === `rewind`){
+
+            buttonInteraction.deferUpdate(); // Discord'a yanıt ver
+            
+            guildPlayers.get(interaction.guild.id).stop();
+            if (!loops.get(interaction.guild.id)) {
+                queue.set(interaction.guild.id, queue.get(interaction.guild.id) - 1);     
+            } 
+            //updateEmbed();
+
+        } else if (buttonInteraction.customId === `previous`) {
+            buttonInteraction.deferUpdate(); // Discord'a yanıt ver
+
+            guildPlayers.get(interaction.guild.id).stop();
+            if (!loops.get(interaction.guild.id)) {
+                queue.set(interaction.guild.id, queue.get(interaction.guild.id) - 2);
+            } else {
+                queue.set(interaction.guild.id, queue.get(interaction.guild.id) - 1);
+            }
+            //updateEmbed();
+
         } else if (buttonInteraction.customId === `loop`) {
             buttonInteraction.deferUpdate(); // Discord'a yanıt ver
             
@@ -277,14 +373,18 @@ async execute(interaction) {
                 queue.set(interaction.guild.id, queue.get(interaction.guild.id) + 1);     
             }
             updateEmbed();
-        } else if (buttonInteraction.customId === `quit`) {
+        }
+        
+        else if (buttonInteraction.customId === `quit`) {
             buttonInteraction.deferUpdate(); // Discord'a yanıt ver
             
             guildPlayers.get(interaction.guild.id).stop();
             guildConnections.get(interaction.guild.id).destroy();
             guildPlayers.delete(interaction.guild.id);
             guildConnections.delete(interaction.guild.id);
+            loops.set(interaction.guild.id, false);
             collector.stop("quit");
+
             deleteQueue();
             modals.delete(interaction.guild.id);
             return interaction.editReply({ content: 'Disconnected from the voice channel.', embeds: [], components: [] });
@@ -311,7 +411,7 @@ async execute(interaction) {
             return;
         }
     
-        console.log('Modal validation passed, processing...');
+        console.log('Modal validation  passed, processing...');
         
         const userInput = modalInteraction.fields.getTextInputValue('user_input');
         const guildId = modalInteraction.guildId;
@@ -343,10 +443,12 @@ async execute(interaction) {
         }
     
         updateEmbed();
-        modalInteraction.reply({ content: `"${userInput}" başarıyla eklendi!`, ephemeral: true });
+        
+        // Modal'ı sessizce kapat - hiçbir mesaj gösterme
+        await modalInteraction.deferUpdate();
         
         // Handler'ı temizle - Memory leak önle
-        interaction.client.off('interactionCreate', modalHandler);
+        //interaction.client.off('interactionCreate', modalHandler);
     };
 
     // ON kullan ama manuel cleanup ile
@@ -354,7 +456,7 @@ async execute(interaction) {
     
     // Collector bittiğinde modal handler'ı da temizle
     collector.on('end', () => {
-        interaction.client.off('interactionCreate', modalHandler);
+        //interaction.client.off('interactionCreate', modalHandler);
         console.log('Collector ended, modal handler cleaned up');
     });
 
