@@ -50,10 +50,10 @@ updateClientStatus(client) {
             client.user.setActivity(`in development mode`);
         }, 60000);
     } else {
-        client.user.setActivity(`v1.2 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
+        client.user.setActivity(`v1.3 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
         
         statusInterval = setInterval(() => {
-            client.user.setActivity(`v1.2 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
+            client.user.setActivity(`v1.3 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
         }, 60000);
     }
 },
