@@ -3,14 +3,13 @@ const { SlashCommandBuilder } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('daily')
-        .setDescription('daily'),
+        .setName('baseset')
+        .setDescription('baseset'),
 
 
 async execute(interaction) {
 
-
-
+    
 
 },
 };

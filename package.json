@@ -11,6 +11,8 @@
   "license": "ISC",
   "dependencies": {
     "@discordjs/voice": "^0.17.0",
+    "@distube/ytdl-core": "^4.11.5",
+    "axios": "^1.11.0",
     "discord-music-player": "^9.1.1",
     "discord.js": "^14.15.2",
     "dotenv": "^16.6.1",
@@ -18,6 +20,8 @@
     "libsodium-wrappers": "^0.7.15",
     "node-fetch": "^3.3.2",
     "prism-media": "^1.3.5",
-    "yt-dlp-wrap": "^2.3.12"
+    "youtube-dl-exec": "^3.0.24",
+    "yt-dlp-wrap": "^2.3.12",
+    "ytdl-core": "^4.11.5"
   }
 }

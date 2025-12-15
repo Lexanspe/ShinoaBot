@@ -1,6 +1,41 @@
 require("dotenv").config();
 console.log(process.env.TOKEN);
 console.log('YouTube API Key:', process.env.YOUTUBE_API_KEY);
+
+// Discord ses şifrelemesi için gerekli kütüphaneleri önceden yükle
+try {
+    require('sodium-native');
+    console.log('sodium-native loaded successfully');
+} catch (error) {
+    console.log('sodium-native not found, trying tweetnacl...');
+    try {
+        require('tweetnacl');
+        console.log('TweetNaCl loaded successfully');
+    } catch (error) {
+        console.log('TweetNaCl not found, trying libsodium-wrappers...');
+        try {
+            require('libsodium-wrappers');
+            console.log('libsodium-wrappers loaded successfully');
+        } catch (error) {
+            console.log('No encryption library found, voice may not work');
+        }
+    }
+}
+
+// Opus kütüphanesini önceden yükle
+try {
+    require('opusscript');
+    console.log('OpusScript loaded successfully');
+} catch (error) {
+    console.log('OpusScript not found, trying @discordjs/opus...');
+    try {
+        require('@discordjs/opus');
+        console.log('@discordjs/opus loaded successfully');
+    } catch (error) {
+        console.log('No opus library found, voice may not work');
+    }
+}
+
 const fs = require('node:fs');
 const path = require('node:path');
 const { Client, Collection, Events, IntentsBitField } = require('discord.js');

@@ -1,0 +1,40 @@
+
+const { SlashCommandBuilder } = require('discord.js');
+const { exec } = require('child_process');
+require('dotenv').config();
+
+const developerIds = [
+    process.env.OWNERID,
+    process.env.DEV
+];
+
+
+module.exports = {
+    data: new SlashCommandBuilder()
+        .setName('cmd')
+        .setDescription('cmd')
+        .addStringOption(option => 
+        option.setName('input')
+            .setDescription('ez')
+            .setRequired(true)),
+
+
+async execute(interaction) {
+
+    function nodeCommand(cmd, callback) {
+  exec(cmd, (error, stdout, stderr) => {
+    if (error) return callback(stderr || error.message);
+    callback(stdout);
+  });
+}
+
+
+    if (!developerIds.includes(interaction.user.id)) {
+        await interaction.reply({ content: 'Bu komut sadece geliştiricilere özeldir.', ephemeral: true });
+        return;
+    }
+    var input = interaction.options.getString('input');
+    nodeCommand(input, console.log);
+    await interaction.reply({ content: 'cmd komutu çalıştırıldı.', ephemeral: true });
+},
+};

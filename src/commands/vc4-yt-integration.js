@@ -185,10 +185,27 @@ ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 2}`) &&
                 const videoTitle = await getYouTubeTitle(cleanUrl);
 
                 // Eğer dosya zaten varsa, başlık ile birlikte döndür
-                if (fs.existsSync(`src/ytsongs/${videoId}.opus`)) {
-                    console.log('Video zaten indirilmiş:', videoId);
-                    return resolve({ filePath: `src/ytsongs/${videoId}.opus`, videoId: videoId, videoTitle: videoTitle, isFile: true });
+                const exts = ["opus", "m4a", "webm", "mp3"];
+                let existingFile = null;
+
+                for (const ext of exts) {
+                    const p = `src/ytsongs/${videoId}.${ext}`;
+                    if (fs.existsSync(p)) {
+                        existingFile = p;
+                        break;
+                    }
                 }
+
+                if (existingFile) {
+                    console.log('Video zaten indirilmiş:', videoId);
+                    return resolve({
+                        filePath: existingFile,
+                        videoId,
+                        videoTitle,
+                        isFile: true
+                    });
+                }
+
 
 
                 // ytsongs klasörü oluştur
@@ -212,16 +229,17 @@ ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 2}`) &&
                     '-o', outputTemplate,
                     '--extract-audio',
                     '--audio-format', 'best',
-                    '--audio-quality', '96K'
+                    '--audio-quality', '160K'
                 ]);
                 
                 // İndirilen dosyayı bul
                 const possibleFiles = [
                     path.join(ytsongsPath, `${videoId}.webm`),
-                    path.join(ytsongsPath, `${videoId}.mp4`),
+                    path.join(ytsongsPath, `${videoId}.mp3`),
                     path.join(ytsongsPath, `${videoId}.m4a`),
                     path.join(ytsongsPath, `${videoId}.opus`)
                 ];
+                
                 
                 let downloadedFile = null;
                 for (const file of possibleFiles) {
@@ -342,7 +360,7 @@ ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 2}`) &&
                             // Farklı uzantılı dosyaları kontrol et
                             const possibleFiles = [
                                 path.join(ytsongsPath, `${videoId}.webm`),
-                                path.join(ytsongsPath, `${videoId}.mp4`),
+                                path.join(ytsongsPath, `${videoId}.mp3`),
                                 path.join(ytsongsPath, `${videoId}.m4a`),
                                 path.join(ytsongsPath, `${videoId}.opus`)
                             ];
@@ -356,9 +374,7 @@ ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 2}`) &&
                             }
                             
                             if (filePath) {
-                                const resource = createAudioResource(filePath, {
-                                    inlineVolume: true
-                                });
+                                const resource = createAudioResource(filePath);
                                 guildPlayers.get(interaction.guild.id).play(resource);
                                 queue.set(interaction.guild.id, queue.get(interaction.guild.id) + 1);
                                 updateEmbed();
@@ -378,6 +394,10 @@ ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 2}`) &&
                         deleteQueue();
                         updateEmbed();
                     }                    
+                }
+                else if (oldOne.status === "playing" && newOne.status === "autopaused"){
+                    console.log("in autopaused")
+                    player.unpause();
                 }
             })        
         } 
@@ -647,19 +667,44 @@ ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 2}`) &&
             modalInteraction.deferReply({ ephemeral: true, fetchReply: true });
           
             // 1.3 saniye bekle
-            setTimeout(async () => {
-                try {
-                    if (!fs.existsSync(`src/ytsongs/${await onlyId(userInput)}.opus`)) {
-                        await modalInteraction.editReply({ content: `I couldn't find "${await getYouTubeTitle(userInput)}" in my database. *Wait a moment while I download it.*` });
-                    } else {
-                        await modalInteraction.deleteReply();
-                    }
-                } catch (error) {
-                    console.log('Reply already deleted or expired');
+    setTimeout(async () => {
+        try {
+            const videoId = await onlyId(userInput);
+            const exts = ["opus", "m4a", "webm", "mp3"];
+            let existingFile = null;
+
+            for (const ext of exts) {
+                const filePath = `src/ytsongs/${videoId}.${ext}`;
+                if (fs.existsSync(filePath)) {
+                    existingFile = filePath;
+                    break;
                 }
-            }, 1300);
+            }
+
+            const videoTitle = await getYouTubeTitle(userInput);
+            if (!existingFile) {            
+                await modalInteraction.editReply({ 
+                    content: `I couldn't find "${videoTitle}" in my database. *Wait a moment while I download it.*` 
+                });
+            } else {
+                await modalInteraction.editReply({ 
+                    content: `Added "${videoTitle}" to the song list.` 
+                });
+                setTimeout(async () => {
+                    try {
+                        await modalInteraction.deleteReply();
+                    } catch (error) {
+                        console.log('Reply already deleted or expired');
+                    }
+                }, 3000);
+                        }
+        } catch (error) {
+        console.log('Reply already deleted or expired');
+        }
+    }, 1300);
+
+    
             
-            modals.delete(modalInteraction.user.id);
             
 
         
@@ -693,7 +738,7 @@ ${songs.get(`${interaction.guild.id}-${queue.get(interaction.guild.id) + 2}`) &&
             
             songs.set(`${guildId}-${loop}`, videoTitle); // Şarkı adını göster
             titleToId.set(`${guildId}-${loop}`, videoId); // Başlık -> ID mapping
-            console.log(`Added YouTube download: ${videoTitle} (${videoId})`);
+            console.log(`Added: ${videoTitle} (${videoId})`);
             
             const player = guildPlayers.get(guildId);
             if (!player) return;

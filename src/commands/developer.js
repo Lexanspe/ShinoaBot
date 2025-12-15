@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('discord.js');
 
-let developmentMode = false;
+let developmentMode = true;
 let statusInterval; // Interval referansını saklamak için
 
 module.exports = {
@@ -44,16 +44,16 @@ updateClientStatus(client) {
     if (statusInterval) clearInterval(statusInterval);
     
     if (developmentMode) {
-        client.user.setActivity(`in development mode`);
+        client.user.setActivity(`beta v1.3 | in development mode `);
         
         statusInterval = setInterval(() => {
-            client.user.setActivity(`in development mode`);
+            client.user.setActivity(`beta v1.3 | in development mode`);
         }, 60000);
     } else {
-        client.user.setActivity(`v1.3 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
+        client.user.setActivity(`beta v1.3 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
         
         statusInterval = setInterval(() => {
-            client.user.setActivity(`v1.3 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
+            client.user.setActivity(`beta v1.3 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
         }, 60000);
     }
 },

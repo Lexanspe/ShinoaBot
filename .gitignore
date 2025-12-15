@@ -1,0 +1,8 @@
+.env
+node_modules/
+banner.gif
+src/tempCodeRunnerFile.js
+register-commands.js
+src/songs/
+gitignore/
+src/ytsongs
