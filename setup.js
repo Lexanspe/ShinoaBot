@@ -65,18 +65,22 @@ async function runSetup() {
     const requiredVars = [
         { key: 'TOKEN', req: true, desc: 'Discord Bot Tokeni (Zorunlu)' },
         { key: 'CLIENTID', req: true, desc: 'Discord Bot Client ID (Slash komutlarini yuklemek icin zorunlu)' },
-        { key: 'OWNERID', req: false, desc: 'Bot Sahibinin Discord IDsi eksik. Geliştirici komutlari kullanilamaz.' },
+        { key: 'OWNERID', req: false, desc: 'Bot Sahibinin Discord IDsi eksik. Gelistirici (/eval, /developer, /setbanner vb.) komutlari kullanilamaz.' },
         { key: 'DEV', req: false, silent: true, desc: 'İkinci gelistirici IDsi eksik.' },
-        { key: 'OTOKEN', req: false, desc: 'OpenRouter API Key eksik. Yapay zeka komutlari calismayacaktir.' },
-        { key: 'TENORKEY', req: false, desc: 'Tenor API Key eksik. Gif komutlari calismayacaktir.' }
+        { key: 'OTOKEN', req: false, desc: 'OpenRouter API Key eksik. Yapay zeka (/ai) komutu calismayacaktir.' },
+        { key: 'TENORKEY', req: false, desc: 'Tenor API Key eksik. Gif (/gif, /gif2someone) komutlari calismayacaktir.' }
     ];
 
     if (!fs.existsSync(envPath)) {
         console.error('❌ HATA: .env dosyasi bulunamadi!');
-        let exampleContent = "";
-        requiredVars.forEach(v => { exampleContent += `${v.key}=YOUR_${v.key}_HERE\n`; });
-        fs.writeFileSync(envExamplePath, exampleContent);
-        console.log(`[BILGI] Sizin icin bir '.env.example' dosyasi olusturuldu.\nLutfen bu dosyanin adini '.env' olarak degistirin ve icindeki tum bilgileri kendi botunuza gore doldurun.`);
+        if (!fs.existsSync(envExamplePath)) {
+            let exampleContent = "";
+            requiredVars.forEach(v => { exampleContent += `${v.key}=YOUR_${v.key}_HERE\n`; });
+            fs.writeFileSync(envExamplePath, exampleContent);
+            console.log(`[BILGI] Sizin icin bir '.env.example' dosyasi olusturuldu.\nLutfen bu dosyanin adini '.env' olarak degistirin ve icindeki tum bilgileri kendi botunuza gore doldurun.`);
+        } else {
+            console.log(`[BILGI] 'env.example' dosyasi bulundu ancak '.env' dosyasi eksik.\nLutfen icini doldurdugunuz '.env.example' dosyasinin adini '.env' olarak degistirin.`);
+        }
         hasError = true;
     } else {
         console.log('✅ .env dosyasi mevcut.');
@@ -106,7 +110,7 @@ async function runSetup() {
     // 3.5. cookies.txt — YouTube bot bypass
     const cookiesPath = path.join(__dirname, 'cookies.txt');
     if (!fs.existsSync(cookiesPath)) {
-        console.log('\n⚠️  UYARI: cookies.txt bulunamadi.');
+        console.log('\n⚠️  UYARI: cookies.txt bulunamadi. (/playyt müzik komutu çalışmayacaktır)');
         console.log('   [BILGI] YouTube bot korumasini asmak icin bu dosya gereklidir.');
         console.log('   [BILGI] Nasil olusturulur:');
         console.log('     1. Chrome\'a "Get cookies.txt LOCALLY" uzantisini ekleyin');

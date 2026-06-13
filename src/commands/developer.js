@@ -44,16 +44,16 @@ module.exports = {
         if (statusInterval) clearInterval(statusInterval);
 
         if (developmentMode) {
-            client.user.setActivity(`beta v1.3 | in development mode `);
+            client.user.setActivity(`v1.0 | in development mode `);
 
             statusInterval = setInterval(() => {
-                client.user.setActivity(`beta v1.3 | in development mode`);
+                client.user.setActivity(`v1.0 | in development mode`);
             }, 60000);
         } else {
-            client.user.setActivity(`beta v1.3 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
+            client.user.setActivity(`v1.0 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
 
             statusInterval = setInterval(() => {
-                client.user.setActivity(`beta v1.3 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
+                client.user.setActivity(`v1.0 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
             }, 60000);
         }
     },
