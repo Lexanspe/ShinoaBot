@@ -32,7 +32,7 @@ async function downloadFile(url, dest) {
                 file.close(resolve);
             });
         }).on('error', (err) => {
-            fs.unlink(dest, () => {});
+            fs.unlink(dest, () => { });
             reject(err);
         });
     });
@@ -79,7 +79,7 @@ async function runSetup() {
             fs.writeFileSync(envExamplePath, exampleContent);
             console.log(`[BILGI] Sizin icin bir '.env.example' dosyasi olusturuldu.\nLutfen bu dosyanin adini '.env' olarak degistirin ve icindeki tum bilgileri kendi botunuza gore doldurun.`);
         } else {
-            console.log(`[BILGI] 'env.example' dosyasi bulundu ancak '.env' dosyasi eksik.\nLutfen icini doldurdugunuz '.env.example' dosyasinin adini '.env' olarak degistirin.`);
+            console.log(`[BILGI] '.env.example' dosyasi bulundu ancak '.env' dosyasi eksik.\nLutfen icini doldurdugunuz '.env.example' dosyasinin adini '.env' olarak degistirin.`);
         }
         hasError = true;
     } else {
@@ -125,11 +125,11 @@ async function runSetup() {
     if (!fs.existsSync(NO_STOCKFISH_FILE) && !hasError) {
         const stockfishDir = path.join(__dirname, 'stockfish');
         if (!fs.existsSync(stockfishDir)) fs.mkdirSync(stockfishDir);
-        
+
         const files = fs.readdirSync(stockfishDir);
         // Eğer stockfish isminde bir exe varsa veya nokta içermiyorsa (Linux/Mac binary)
         let hasExecutable = false;
-        
+
         function checkDirForExecutable(dir) {
             const items = fs.readdirSync(dir);
             for (const item of items) {
@@ -166,7 +166,7 @@ async function runSetup() {
                     } else {
                         throw new Error('Desteklenmeyen isletim sistemi.');
                     }
-                    
+
                     const archivePath = path.join(stockfishDir, `stockfish${archiveExt}`);
                     await downloadFile(downloadUrl, archivePath);
                     console.log('Indirme tamamlandi. Arsiv cikartiliyor...');
