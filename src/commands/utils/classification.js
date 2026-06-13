@@ -106,7 +106,7 @@ function calculateWinProbability(evalData) {
 // Stockfish engine
 // ---------------------------------------------------------------------------
 
-const STOCKFISH_DIR = path.join(__dirname, '..', '..', 'stockfish');
+const STOCKFISH_DIR = path.join(__dirname, '..', '..', '..', 'stockfish');
 let STOCKFISH_PATH = null;
 
 if (fs.existsSync(STOCKFISH_DIR)) {
@@ -128,7 +128,7 @@ if (fs.existsSync(STOCKFISH_DIR)) {
 }
 async function getStockfishMove(fen, depth, multiPv = 1) {
     if (!STOCKFISH_PATH) return null;
-    
+
     return new Promise((resolve) => {
         const safeDepth = Math.max(5, parseInt(depth) || 5);
         const engine = spawn(STOCKFISH_PATH);

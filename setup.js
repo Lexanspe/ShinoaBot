@@ -170,8 +170,25 @@ async function runSetup() {
                     const archivePath = path.join(stockfishDir, `stockfish${archiveExt}`);
                     await downloadFile(downloadUrl, archivePath);
                     console.log('Indirme tamamlandi. Arsiv cikartiliyor...');
+
+                    // Çıkarma işlemi
                     execSync(`tar -xf "${archivePath}" -C "${stockfishDir}"`);
-                    fs.unlinkSync(archivePath);
+                    fs.unlinkSync(archivePath); // Arşivi sil
+
+                    // Eğer çıkarma işlemi sonucunda stockfishDir içinde sadece tek bir klasör oluştuysa,
+                    // o klasörün içindeki her şeyi bir üst (stockfishDir) dizinine taşı ve boş klasörü sil.
+                    const extractedItems = fs.readdirSync(stockfishDir);
+                    if (extractedItems.length === 1) {
+                        const singleDir = path.join(stockfishDir, extractedItems[0]);
+                        if (fs.statSync(singleDir).isDirectory()) {
+                            const subItems = fs.readdirSync(singleDir);
+                            for (const item of subItems) {
+                                fs.renameSync(path.join(singleDir, item), path.join(stockfishDir, item));
+                            }
+                            fs.rmdirSync(singleDir);
+                        }
+                    }
+
                     console.log('✅ Stockfish basariyla kuruldu.');
                 } catch (err) {
                     console.error('❌ Stockfish indirilirken hata olustu:', err.message);
