@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('discord.js');
 
-let developmentMode = true;
+let developmentMode = false;
 let statusInterval; // Interval referansını saklamak için
 
 module.exports = {
@@ -12,62 +12,62 @@ module.exports = {
                 .setDescription('Enable or disable developer mode')
                 .setRequired(true)),
 
-async execute(interaction, client) {
+    async execute(interaction, client) {
 
-    if (interaction.user.id != process.env.OWNERID && interaction.user.id != process.env.DEV) {
-        return;
-    }
+        if (interaction.user.id != process.env.OWNERID && interaction.user.id != process.env.DEV) {
+            return;
+        }
 
-    const devMode = interaction.options.getBoolean('dev');
-    
+        const devMode = interaction.options.getBoolean('dev');
 
-    if (devMode && developmentMode) {
-        return interaction.reply({ content: "I'm already in development mode", ephemeral: true });
-    } else if (!devMode && !developmentMode) {
-        return interaction.reply({ content: "I'm already in normal mode", ephemeral: true });
-    } else if (devMode && !developmentMode) {
-        developmentMode = true;
-        interaction.reply({ content: "Switched to development mode", ephemeral: false });
-    } else if (!devMode && developmentMode) {
-        developmentMode = false;
-        interaction.reply({ content: "Switched to normal mode", ephemeral: false });
-    }
-    
-    // Status güncelleme
-    this.updateClientStatus(client);
 
-},
+        if (devMode && developmentMode) {
+            return interaction.reply({ content: "I'm already in development mode", flags: 64 });
+        } else if (!devMode && !developmentMode) {
+            return interaction.reply({ content: "I'm already in normal mode", flags: 64 });
+        } else if (devMode && !developmentMode) {
+            developmentMode = true;
+            interaction.reply({ content: "Switched to development mode", ephemeral: false });
+        } else if (!devMode && developmentMode) {
+            developmentMode = false;
+            interaction.reply({ content: "Switched to normal mode", ephemeral: false });
+        }
 
-// Status güncelleme fonksiyonu
-updateClientStatus(client) {
-    // Önceki interval'ı temizle
-    if (statusInterval) clearInterval(statusInterval);
-    
-    if (developmentMode) {
-        client.user.setActivity(`beta v1.3 | in development mode `);
-        
-        statusInterval = setInterval(() => {
-            client.user.setActivity(`beta v1.3 | in development mode`);
-        }, 60000);
-    } else {
-        client.user.setActivity(`beta v1.3 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
-        
-        statusInterval = setInterval(() => {
+        // Status güncelleme
+        this.updateClientStatus(client);
+
+    },
+
+    // Status güncelleme fonksiyonu
+    updateClientStatus(client) {
+        // Önceki interval'ı temizle
+        if (statusInterval) clearInterval(statusInterval);
+
+        if (developmentMode) {
+            client.user.setActivity(`beta v1.3 | in development mode `);
+
+            statusInterval = setInterval(() => {
+                client.user.setActivity(`beta v1.3 | in development mode`);
+            }, 60000);
+        } else {
             client.user.setActivity(`beta v1.3 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
-        }, 60000);
-    }
-},
 
-// Developer kontrolü fonksiyonu
-checkDeveloperPermission(userId) {
-    return userId === process.env.OWNERID || userId === process.env.DEV;
-},
+            statusInterval = setInterval(() => {
+                client.user.setActivity(`beta v1.3 | ${client.guilds.cache.map(g => g.name).length} sunucuda!`);
+            }, 60000);
+        }
+    },
 
-// Developer mode kontrolü fonksiyonu  
-checkDeveloperModeRestriction(userId) {
-    return !this.checkDeveloperPermission(userId) && developmentMode;
-},
+    // Developer kontrolü fonksiyonu
+    checkDeveloperPermission(userId) {
+        return userId === process.env.OWNERID || userId === process.env.DEV;
+    },
 
-getDevelopmentMode: () => developmentMode,
+    // Developer mode kontrolü fonksiyonu  
+    checkDeveloperModeRestriction(userId) {
+        return !this.checkDeveloperPermission(userId) && developmentMode;
+    },
+
+    getDevelopmentMode: () => developmentMode,
 
 };

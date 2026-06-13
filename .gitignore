@@ -5,4 +5,15 @@ src/tempCodeRunnerFile.js
 register-commands.js
 src/songs/
 gitignore/
-src/ytsongs
+media/ytsongs/*
+!media/ytsongs/.gitkeep
+data/aihistory/*
+!data/aihistory/.gitkeep
+media/banner.gif
+stockfish
+tests_and_experiments
+.setup_complete
+media/move_classifications/magnificent.webp
+media/move_classifications/forced.webp
+src/bin/
+cookies.txt

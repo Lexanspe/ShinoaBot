@@ -30,7 +30,7 @@ module.exports = {
         ),
 async execute(interaction) {
     if (interaction.options.getString('arama') == "rickroll") {
-        interaction.reply({ content: "nope, no rickroll", ephemeral: true });
+        interaction.reply({ content: "nope, no rickroll", flags: 64 });
         console.log("rickroll");
         return;
     }
@@ -40,7 +40,7 @@ async execute(interaction) {
     let json = await response.json();
     let number = Math.floor(Math.random() * json.results.length);
     if (interaction.options.getBoolean('geliştiricimodu')) {
-        if (interaction.user.id != process.env.OWNERID) { interaction.reply({ content: "Geliştirici olduğunu sanmıyorum.", ephemeral: true }); return;}
+        if (interaction.user.id != process.env.OWNERID) { interaction.reply({ content: "Geliştirici olduğunu sanmıyorum.", flags: 64 }); return;}
         console.log("Developer mode activated");
         await interaction.reply(json.results[0].url);
         for (let i = 1; i < json.results.length; i++) {
@@ -50,10 +50,10 @@ async execute(interaction) {
 
         if (interaction.options.getInteger('sgn') != null) {
             if (interaction.options.getInteger('sgn') > 50) {
-                interaction.reply({ content: "Ne yazık ki sadece 50 gif var.", ephemeral: true });
+                interaction.reply({ content: "Ne yazık ki sadece 50 gif var.", flags: 64 });
                 return;
             } else if (interaction.options.getInteger('sgn') < 1) {
-                interaction.reply({ content: "tek akıllı sendin", ephemeral: true });
+                interaction.reply({ content: "tek akıllı sendin", flags: 64 });
                 return;
             }
             number = interaction.options.getInteger('sgn') - 1;

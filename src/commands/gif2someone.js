@@ -55,16 +55,16 @@ async execute(interaction) {
     let json = await response.json();
     let number = Math.floor(Math.random() * json.results.length);
     if (interaction.user.id == interaction.options.getUser('kişi').id) {
-        interaction.reply({ content: "Kendine gif gönderemezsin.", ephemeral: true });
+        interaction.reply({ content: "Kendine gif gönderemezsin.", flags: 64 });
         return;
     }
 
     if (interaction.options.getInteger('sgn') != null) { //specific gif number
         if (interaction.options.getInteger('sgn') > 10) {
-            interaction.reply({ content: "Ne yazık ki sadece 10 gif var.", ephemeral: true });
+            interaction.reply({ content: "Ne yazık ki sadece 10 gif var.", flags: 64 });
             return;
         } else if (interaction.options.getInteger('sgn') < 1) {
-            interaction.reply({ content: "tek akıllı sendin", ephemeral: true });
+            interaction.reply({ content: "tek akıllı sendin", flags: 64 });
             return; 
         }
         number = interaction.options.getInteger('sgn') - 1;

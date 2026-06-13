@@ -1,0 +1,19 @@
+# ShinoaBot Requirements Checklist
+
+## 1. Node.js Environment
+- Node.js installed (v16.14.0 or higher is recommended for discord.js v14)
+- All NPM dependencies installed (discord.js, dotenv, jimp, chess.js, etc.)
+
+## 2. Environment Variables (.env)
+- A `.env` file must exist in the root directory.
+- `TOKEN`: Your Discord bot token. **(Required)**
+- `CLIENTID`: Your Discord bot client ID. **(Required)**
+- `OWNERID`: Your Discord user ID (for developer commands). *(Optional)*
+- `OTOKEN`: OpenRouter API Key (for AI commands). *(Optional)*
+- `TENORKEY`: Tenor API Key (for GIF commands). *(Optional)*
+
+## 3. Media & Assets
+- `media/banner.gif`: (Optional) Required only if you intend to use the `/setbanner` command.
+
+## 4. External Engines
+- Stockfish executable must be present in the `stockfish/` directory depending on your OS.
