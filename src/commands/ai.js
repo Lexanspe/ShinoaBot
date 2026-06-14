@@ -1229,12 +1229,21 @@ module.exports = {
                             components: [
                                 {
                                     type: ComponentType.TextDisplay,
-                                    content: l.tool_called[args[0]].toString().replace('{a}', args[1]?.code || JSON.stringify(args[1])),
+                                    content: (() => {
+                                        let argStr = args[1]?.code || JSON.stringify(args[1]) || "";
+                                        if (argStr.length > 1000) argStr = argStr.substring(0, 997) + "...";
+                                        return l.tool_called[args[0]]?.toString().replace('{a}', argStr) || `Tool called: ${args[0]}`;
+                                    })(),
                                 },
                                 { type: ComponentType.Separator, spacing: 1 },
                                 {
                                     type: ComponentType.TextDisplay,
-                                    content: args[2] ? l.tool_response.replace('{a}', args[2]) : l.no_tool_response,
+                                    content: (() => {
+                                        if (!args[2]) return l.no_tool_response;
+                                        let respStr = typeof args[2] === 'string' ? args[2] : JSON.stringify(args[2]);
+                                        if (respStr.length > 1000) respStr = respStr.substring(0, 997) + "...";
+                                        return l.tool_response.replace('{a}', respStr);
+                                    })(),
                                 }
                             ],
                         },
@@ -1242,6 +1251,10 @@ module.exports = {
                             type: ComponentType.TextDisplay,
                             content: l.no_response,
                         },
+                    };
+                    const limitText = (str) => {
+                        if (!str) return "";
+                        return str.length > 2000 ? str.substring(0, 1997) + "..." : str;
                     };
                     switch (mode) {
                         case 'edit':
@@ -1254,7 +1267,7 @@ module.exports = {
                                     else if (typeof input === 'string') {
                                         message.push(component.text);
                                         last_component = "text";
-                                        if (input.trim() != "") message[message.length - 1].content = input;
+                                        if (input.trim() != "") message[message.length - 1].content = limitText(input);
                                         animStep = 1;
                                     }
                                     else {
@@ -1264,18 +1277,18 @@ module.exports = {
                                     }
                                     break;
                                 case 'text':
-                                    if (input.trim() != "") message[message.length - 1].content = input;
+                                    if (input.trim() != "") message[message.length - 1].content = limitText(input);
                                     break;
                                 case 'tool_call':
                                     message.push(component.text);
                                     last_component = "text";
-                                    if (input.trim() != "") message[message.length - 1].content = input;
+                                    if (input.trim() != "") message[message.length - 1].content = limitText(input);
                                     break;
                                 default:
                                     if (message.length == 0 && input) {
                                         message.push(component.text);
                                         last_component = "text";
-                                        if (input.trim() != "") message[message.length - 1].content = input;
+                                        if (input.trim() != "") message[message.length - 1].content = limitText(input);
                                     }
                                     break;
                             }
