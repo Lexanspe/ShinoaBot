@@ -310,7 +310,7 @@ async function chess_engine_tool({ input, depth = 15, session_id = "default", co
             if (session.moveHistory && session.moveHistory.length > 0) {
                 const fullChess = new Chess();
                 for (const m of session.moveHistory) {
-                    try { fullChess.move(m); } catch (e) {}
+                    try { fullChess.move(m); } catch (e) { }
                 }
                 return { pgn: fullChess.pgn() };
             }
@@ -573,7 +573,7 @@ async function chess_engine_tool({ input, depth = 15, session_id = "default", co
         let tempCh, historyBeforeNewMoves;
         if (hasMoveHistory) {
             tempCh = new Chess();
-            for (const m of _mh) { try { tempCh.move(m); } catch (e) {} }
+            for (const m of _mh) { try { tempCh.move(m); } catch (e) { } }
             if (tempCh.fen().split(' ')[0] !== session.chess.fen().split(' ')[0]) {
                 // Sanity-check failed: fall back to FEN, clear stale history
                 tempCh = new Chess(session.chess.fen());
