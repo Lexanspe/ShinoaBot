@@ -438,6 +438,423 @@ async function buildBoardMessage(chess, userId, message = "", evalData = null, s
         files: attachment ? [attachment] : []
     };
 }
+
+function findMatchingMove(chess, moveInput) {
+    const cleanInput = moveInput.trim().replace(/[\+#\?\!\s]/g, '');
+
+    // Support castling notation variations
+    let normalizedInput = cleanInput;
+    if (cleanInput.toLowerCase() === 'o-o') {
+        normalizedInput = 'O-O';
+    } else if (cleanInput.toLowerCase() === 'o-o-o') {
+        normalizedInput = 'O-O-O';
+    } else if (cleanInput === '0-0') {
+        normalizedInput = 'O-O';
+    } else if (cleanInput === '0-0-0') {
+        normalizedInput = 'O-O-O';
+    }
+
+    const validMoves = chess.moves({ verbose: true });
+
+    // 1. Try case-insensitive matching against SAN (Standard Algebraic Notation)
+    const matchedSan = validMoves.find(m => {
+        const cleanSan = m.san.replace(/[\+#\?\!\s]/g, '');
+        return cleanSan.toLowerCase() === normalizedInput.toLowerCase();
+    });
+    if (matchedSan) return matchedSan.san;
+
+    // 2. Try case-insensitive matching against UCI coordinate notation (e.g., e2e4 or e7e8q)
+    if (/^[a-h][1-8][a-h][1-8][qrbn]?$/i.test(normalizedInput)) {
+        const from = normalizedInput.substring(0, 2).toLowerCase();
+        const to = normalizedInput.substring(2, 4).toLowerCase();
+        const promotion = normalizedInput[4]?.toLowerCase();
+        const matchedCoordinate = validMoves.find(m => {
+            return m.from === from && m.to === to && (!promotion || m.promotion === promotion);
+        });
+        if (matchedCoordinate) return matchedCoordinate.san;
+    }
+
+    // 3. Try matching pawn capture shorthand like "ed5" or "ed"
+    if (/^[a-h][a-h][1-8]?$/i.test(normalizedInput)) {
+        const fromFile = normalizedInput[0].toLowerCase();
+        const toFile = normalizedInput[1].toLowerCase();
+        const toRank = normalizedInput[2];
+        const matchedCapture = validMoves.find(m => {
+            return m.piece === 'p' &&
+                m.from[0] === fromFile &&
+                m.to[0] === toFile &&
+                (!toRank || m.to[1] === toRank);
+        });
+        if (matchedCapture) return matchedCapture.san;
+    }
+
+    return null;
+}
+
+async function updateGameMessage(interaction, gameSession, msgData) {
+    const interactionMessageId = interaction.message?.id;
+    const sessionMessageId = gameSession.message?.id;
+
+    if (sessionMessageId && interactionMessageId && sessionMessageId !== interactionMessageId) {
+        try {
+            await gameSession.message.edit(msgData);
+            return;
+        } catch (e) {
+            console.error("Failed to edit refreshed game session message:", e);
+        }
+    }
+
+    try {
+        await interaction.editReply(msgData);
+    } catch (e) {
+        if (e.code === 10008 || e.status === 404) {
+            if (gameSession.message) {
+                try {
+                    await gameSession.message.edit(msgData);
+                    return;
+                } catch (err) {
+                    console.error("Failed to edit message directly after interaction edit failed:", err);
+                }
+            }
+        } else {
+            console.error("Failed to edit reply on interaction:", e);
+        }
+        // Do not throw the error to prevent bot from crashing on expired/deleted message interactions
+    }
+}
+
+async function triggerNextPremove(gameSession) {
+    const nextTurn = gameSession.chess.turn(); // 'w' or 'b'
+    const queue = gameSession.premoves?.[nextTurn];
+    if (queue && queue.length > 0) {
+        const nextMove = queue.shift();
+        // Run processMove in background without blocking
+        processMove(gameSession, nextMove, nextTurn).catch(console.error);
+    }
+}
+
+async function processMove(gameSession, moveText, turnColor, interaction = null) {
+    const chess = gameSession.chess;
+    const ownerId = gameSession.playerWhite;
+
+    // 1. Find case-insensitive matching move
+    const matchedMove = findMatchingMove(chess, moveText);
+    if (!matchedMove) {
+        // Clear queue for this color and alert
+        if (gameSession.premoves) {
+            gameSession.premoves[turnColor] = [];
+        }
+        gameSession.isThinking = false;
+
+        const warningMsg = `Pmove geçersiz olduğu için iptal edildi: **${moveText}**`;
+        gameSession.lastMessageText = warningMsg;
+        const msgData = await buildBoardMessage(chess, ownerId, warningMsg, gameSession.evalData, gameSession.showEvoBar, gameSession.lastMoveBadge, gameSession.lastTargetSquare, null, gameSession.lastSourceSquare);
+
+        if (interaction) {
+            await interaction.reply({ content: warningMsg, flags: 64 });
+        } else if (gameSession.message) {
+            try {
+                await gameSession.message.edit(msgData);
+            } catch (e) {
+                console.error("Failed to edit message for invalid premove warning:", e);
+            }
+        }
+        return;
+    }
+
+    const fenBeforeMove = chess.fen();
+    let moveObj;
+    try {
+        moveObj = chess.move(matchedMove);
+    } catch (e) {
+        // Fallback
+        if (gameSession.premoves) {
+            gameSession.premoves[turnColor] = [];
+        }
+        gameSession.isThinking = false;
+        return;
+    }
+
+    gameSession.isThinking = true;
+    if (interaction) {
+        await interaction.deferUpdate();
+    }
+
+    try {
+        if (chess.isGameOver()) {
+            activeGames.delete(gameSession.playerWhite);
+            if (gameSession.type === 'PvP') activeGames.delete(gameSession.playerBlack);
+
+            let lastBadge = "";
+            const lastTarget = moveObj ? moveObj.to : "";
+            const lastSource = moveObj ? moveObj.from : "";
+
+            if (gameSession.showAnalysis && moveObj) {
+                if (chess.isCheckmate()) {
+                    lastBadge = "best";
+                    const tempChess = new Chess(fenBeforeMove);
+                    tempChess.move(moveObj);
+                    const movedPieceVal = getPieceValue(moveObj.piece);
+                    const capturedPieceVal = getPieceValue(moveObj.captured);
+                    const isWhiteLastMove = chess.turn() === 'b';
+                    const opColor = isWhiteLastMove ? 'b' : 'w';
+                    const myColor = isWhiteLastMove ? 'w' : 'b';
+                    const attackedByOpp = tempChess.isAttacked(moveObj.to, opColor);
+                    const defendedByUs = tempChess.isAttacked(moveObj.to, myColor);
+                    const netLoss = movedPieceVal - capturedPieceVal;
+                    if (attackedByOpp && !defendedByUs && netLoss >= 2 && movedPieceVal >= 3) {
+                        lastBadge = "brilliant";
+                    }
+                } else {
+                    lastBadge = "best";
+                }
+            }
+
+            const msgText = `Oyun bitti!`;
+            gameSession.lastMessageText = msgText;
+            const msgData = await buildBoardMessage(chess, ownerId, msgText, gameSession.evalData, gameSession.showEvoBar, lastBadge, lastTarget, null, lastSource);
+
+            if (interaction) {
+                await updateGameMessage(interaction, gameSession, msgData);
+            } else if (gameSession.message) {
+                try {
+                    await gameSession.message.edit(msgData);
+                } catch (e) {
+                    console.error("Failed to edit game over message directly:", e);
+                }
+            }
+            return;
+        }
+
+        if (gameSession.type === 'PvP') {
+            let sfDataBeforeUser = { pvs: {} };
+            if (gameSession.showAnalysis) {
+                sfDataBeforeUser = await getStockfishMove(fenBeforeMove, gameSession.difficulty, 3);
+            }
+            const prevEvalUser = { evaluation: gameSession.evalData.evaluation, mate: gameSession.evalData.mate };
+            const sfDataAfterUser = await getStockfishMove(chess.fen(), gameSession.difficulty, 1);
+
+            let userClassBadge = "";
+            let userTargetSquare = "";
+            let userSymbol = "";
+            if (gameSession.showAnalysis) {
+                let isBook = false;
+                if (!gameSession.outOfBook) {
+                    isBook = await checkChessDBBook(fenBeforeMove, moveObj);
+                    if (!isBook) gameSession.outOfBook = true;
+                }
+
+                if (isBook) {
+                    userClassBadge = "book";
+                } else {
+                    const isWhiteMove = chess.turn() === 'b';
+                    userClassBadge = await classifyMove(prevEvalUser, sfDataAfterUser, isWhiteMove, sfDataBeforeUser.pvs, moveObj, fenBeforeMove, gameSession.lastMoveBadge);
+                }
+                userSymbol = badgeSymbols[userClassBadge] || "";
+                userTargetSquare = moveObj.to;
+            }
+            gameSession.evalData = { evaluation: sfDataAfterUser.evaluation, mate: sfDataAfterUser.mate };
+            gameSession.lastMoveBadge = userClassBadge;
+            gameSession.lastTargetSquare = userTargetSquare;
+            gameSession.lastSourceSquare = moveObj.from;
+            gameSession.isThinking = false;
+
+            if (!gameSession.moveHistoryData) {
+                gameSession.moveHistoryData = [];
+            }
+            gameSession.moveHistoryData.push({
+                badge: userClassBadge,
+                targetSquare: userTargetSquare,
+                sourceSquare: moveObj.from,
+                evalData: { ...gameSession.evalData }
+            });
+
+            const nextPlayerId = chess.turn() === 'w' ? gameSession.playerWhite : gameSession.playerBlack;
+            const message = `Sıra sende <@${nextPlayerId}>!`;
+            gameSession.lastMessageText = message;
+
+            const msgData = await buildBoardMessage(chess, ownerId, message, gameSession.evalData, gameSession.showEvoBar, userClassBadge, userTargetSquare, null, moveObj.from);
+
+            if (activeGames.has(ownerId)) {
+                if (interaction) {
+                    await updateGameMessage(interaction, gameSession, msgData);
+                } else if (gameSession.message) {
+                    try {
+                        await gameSession.message.edit(msgData);
+                    } catch (e) {
+                        console.error("Failed to edit PvP message directly:", e);
+                    }
+                }
+                // Trigger next premove in PvP
+                await triggerNextPremove(gameSession);
+            }
+
+        } else {
+            // PvE Mode
+            let sfDataBeforeUser = { pvs: {} };
+            if (gameSession.showAnalysis) {
+                sfDataBeforeUser = await getStockfishMove(fenBeforeMove, gameSession.difficulty, 3);
+            }
+            const prevEvalUser = { evaluation: gameSession.evalData.evaluation, mate: gameSession.evalData.mate };
+            const sfDataAfterUser = await getStockfishMove(chess.fen(), gameSession.difficulty, 1);
+
+            let userClassBadge = "";
+            let userTargetSquare = "";
+            let userSymbol = "";
+            if (gameSession.showAnalysis) {
+                let isBook = false;
+                if (!gameSession.outOfBook) {
+                    isBook = await checkChessDBBook(fenBeforeMove, moveObj);
+                    if (!isBook) gameSession.outOfBook = true;
+                }
+
+                if (isBook) {
+                    userClassBadge = "book";
+                } else {
+                    userClassBadge = await classifyMove(prevEvalUser, sfDataAfterUser, true, sfDataBeforeUser.pvs, moveObj, fenBeforeMove, gameSession.lastMoveBadge);
+                }
+                userSymbol = badgeSymbols[userClassBadge] || "";
+                userTargetSquare = moveObj.to;
+            }
+
+            gameSession.evalData = { evaluation: sfDataAfterUser.evaluation, mate: sfDataAfterUser.mate };
+            gameSession.lastMoveBadge = userClassBadge;
+            gameSession.lastTargetSquare = userTargetSquare;
+            gameSession.lastSourceSquare = moveObj.from;
+
+            if (!gameSession.moveHistoryData) {
+                gameSession.moveHistoryData = [];
+            }
+            gameSession.moveHistoryData.push({
+                badge: userClassBadge,
+                targetSquare: userTargetSquare,
+                sourceSquare: moveObj.from,
+                evalData: { ...gameSession.evalData }
+            });
+
+            const interimMsgText = `Düşünüyor... ${userSymbol}`;
+            gameSession.lastMessageText = interimMsgText;
+
+            const interimMsgData = await buildBoardMessage(chess, ownerId, interimMsgText, gameSession.evalData, gameSession.showEvoBar, userClassBadge, userTargetSquare, null, moveObj.from);
+
+            if (activeGames.has(ownerId)) {
+                if (interaction) {
+                    await updateGameMessage(interaction, gameSession, interimMsgData);
+                } else if (gameSession.message) {
+                    try {
+                        await gameSession.message.edit(interimMsgData);
+                    } catch (e) {
+                        console.error("Failed to edit PvE interim message directly:", e);
+                    }
+                }
+            }
+
+            if (!sfDataAfterUser.move) {
+                gameSession.isThinking = false;
+                return;
+            }
+
+            const fenBeforeSfMove = chess.fen();
+            let sfMoveObj;
+            try {
+                sfMoveObj = chess.move(sfDataAfterUser.move);
+            } catch (e) {
+                sfMoveObj = null;
+            }
+
+            const sfDataAfterSf = await getStockfishMove(chess.fen(), gameSession.difficulty, 1);
+
+            let sfClassBadge = "";
+            let sfTargetSquare = "";
+            let sfSymbol = "";
+
+            if (gameSession.showAnalysis && sfMoveObj) {
+                if (chess.isGameOver() && chess.isCheckmate()) {
+                    sfClassBadge = "best";
+                    const tempChess2 = new Chess(fenBeforeSfMove);
+                    tempChess2.move(sfMoveObj);
+                    const sfMovedVal = getPieceValue(sfMoveObj.piece);
+                    const sfCapturedVal = getPieceValue(sfMoveObj.captured);
+                    const sfOpColor = 'w';
+                    const sfMyColor = 'b';
+                    const sfAttacked = tempChess2.isAttacked(sfMoveObj.to, sfOpColor);
+                    const sfDefended = tempChess2.isAttacked(sfMoveObj.to, sfMyColor);
+                    const sfNetLoss = sfMovedVal - sfCapturedVal;
+                    if (sfAttacked && !sfDefended && sfNetLoss >= 2 && sfMovedVal >= 3) {
+                        sfClassBadge = "brilliant";
+                    }
+                } else if (!chess.isGameOver()) {
+                    let isBookSf = false;
+                    if (!gameSession.outOfBook) {
+                        isBookSf = await checkChessDBBook(fenBeforeSfMove, sfMoveObj);
+                        if (!isBookSf) gameSession.outOfBook = true;
+                    }
+                    sfClassBadge = isBookSf ? "book" : await classifyMove(gameSession.evalData, sfDataAfterSf, false, null, sfMoveObj, fenBeforeSfMove, userClassBadge);
+                }
+                sfSymbol = badgeSymbols[sfClassBadge] || "";
+                sfTargetSquare = sfMoveObj.to;
+            }
+            const sfSourceSquare = sfMoveObj ? sfMoveObj.from : sfDataAfterUser.move.substring(0, 2);
+
+            if (chess.isGameOver() && chess.isCheckmate()) {
+                gameSession.evalData = { evaluation: null, mate: 0 };
+            } else {
+                gameSession.evalData = { evaluation: sfDataAfterSf.evaluation, mate: sfDataAfterSf.mate };
+            }
+            gameSession.lastMoveBadge = sfClassBadge;
+            gameSession.lastTargetSquare = sfTargetSquare;
+            gameSession.lastSourceSquare = sfSourceSquare;
+            gameSession.isThinking = false;
+
+            if (!gameSession.moveHistoryData) {
+                gameSession.moveHistoryData = [];
+            }
+            gameSession.moveHistoryData.push({
+                badge: sfClassBadge,
+                targetSquare: sfTargetSquare,
+                sourceSquare: sfSourceSquare,
+                evalData: { ...gameSession.evalData }
+            });
+
+            if (chess.isGameOver()) {
+                activeGames.delete(gameSession.playerWhite);
+                const gameOverMsgData = await buildBoardMessage(chess, ownerId, `Oyun bitti!`, gameSession.evalData, gameSession.showEvoBar, sfClassBadge, sfTargetSquare, null, sfSourceSquare);
+                if (interaction) {
+                    await updateGameMessage(interaction, gameSession, gameOverMsgData);
+                } else if (gameSession.message) {
+                    try {
+                        await gameSession.message.edit(gameOverMsgData);
+                    } catch (e) {
+                        console.error("Failed to edit PvE game over message directly:", e);
+                    }
+                }
+                return;
+            }
+
+            const finalMsgText = `Stockfish oynadı: **${sfMoveObj ? sfMoveObj.san : sfDataAfterUser.move}** ${sfSymbol}\nSıra sende.`;
+            gameSession.lastMessageText = finalMsgText;
+            const finalMsgData = await buildBoardMessage(chess, ownerId, finalMsgText, gameSession.evalData, gameSession.showEvoBar, sfClassBadge, sfTargetSquare, null, sfSourceSquare);
+
+            if (activeGames.has(ownerId)) {
+                if (interaction) {
+                    await updateGameMessage(interaction, gameSession, finalMsgData);
+                } else if (gameSession.message) {
+                    try {
+                        await gameSession.message.edit(finalMsgData);
+                    } catch (e) {
+                        console.error("Failed to edit Stockfish response message directly:", e);
+                    }
+                }
+                // Trigger next premove in PvE
+                await triggerNextPremove(gameSession);
+            }
+        }
+    } catch (error) {
+        console.error(error);
+        gameSession.isThinking = false;
+    }
+}
+
 module.exports = {
     cooldown: 0,
     data: new SlashCommandBuilder()
@@ -478,7 +895,47 @@ module.exports = {
         const opponentUser = interaction.options.getUser('rakip');
 
         if (activeGames.has(userId)) {
-            return interaction.reply({ content: 'Zaten devam eden bir oyununuz var. Yenisini başlatmak için önce eskisinden pes etmelisiniz.', flags: 64 });
+            const gameSession = activeGames.get(userId);
+
+            if (gameSession.isThinking) {
+                await interaction.deferReply();
+                let waitTime = 0;
+                while (gameSession.isThinking && waitTime < 10000) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    waitTime += 500;
+                }
+            }
+
+            // Delete old message if exists
+            if (gameSession.message) {
+                try {
+                    await gameSession.message.delete();
+                } catch (e) {
+                    console.error("Failed to delete old chess message:", e);
+                }
+                gameSession.message = null;
+            }
+
+            if (!interaction.deferred) {
+                await interaction.deferReply();
+            }
+
+            const msgData = await buildBoardMessage(
+                gameSession.chess,
+                gameSession.playerWhite,
+                gameSession.lastMessageText || "",
+                gameSession.evalData,
+                gameSession.showEvoBar,
+                gameSession.lastMoveBadge || "",
+                gameSession.lastTargetSquare || "",
+                null,
+                gameSession.lastSourceSquare || ""
+            );
+
+            msgData.fetchReply = true;
+            const reply = await interaction.editReply(msgData);
+            gameSession.message = reply;
+            return;
         }
 
         let type = 'PvE';
@@ -507,7 +964,7 @@ module.exports = {
         const chess = new Chess();
         const evalData = { evaluation: 0.0, mate: null };
 
-        const gameSession = { type, playerWhite, playerBlack, chess, difficulty, evalData, showEvoBar, showAnalysis, isThinking: false, outOfBook: false, lastMoveBadge: "", lastTargetSquare: "", lastSourceSquare: "" };
+        const gameSession = { type, playerWhite, playerBlack, chess, difficulty, evalData, showEvoBar, showAnalysis, isThinking: false, outOfBook: false, lastMoveBadge: "", lastTargetSquare: "", lastSourceSquare: "", lastMessageText: "", moveHistoryData: [] };
         chess._gameType = type;   // attach to Chess instance so buildBoardMessage can read it
         chess._takebackState = null;
         activeGames.set(playerWhite, gameSession);
@@ -519,6 +976,7 @@ module.exports = {
         if (type === 'PvP') {
             messageText = `**PvP Modu Başladı!**\n<@${playerWhite}> (Beyaz) vs <@${playerBlack}> (Siyah)\n\nSıra Beyaz'da, ilk hamleyi yap!`;
         }
+        gameSession.lastMessageText = messageText;
 
         const msgData = await buildBoardMessage(chess, playerWhite, messageText, evalData, showEvoBar);
         msgData.fetchReply = true;
@@ -673,8 +1131,21 @@ module.exports = {
         }
 
         if (interaction.customId.startsWith('chess_takeback_request_')) {
+            const playerColor = userId === gameSession.playerWhite ? 'w' : 'b';
+            const queue = gameSession.premoves?.[playerColor];
+            if (queue && queue.length > 0) {
+                const removedPremove = queue.pop();
+                const warningMsg = `Kuyruktaki son premove iptal edildi: **${removedPremove}**`;
+                if (isDeferred) {
+                    await interaction.followUp({ content: warningMsg, flags: 64 });
+                } else {
+                    await interaction.reply({ content: warningMsg, flags: 64 });
+                }
+                return;
+            }
+
             if (gameSession.chess.history().length === 0) {
-                return interaction.reply({ content: 'Geri al\u0131nacak hamle yok!', flags: 64 });
+                return interaction.reply({ content: 'Geri alınacak hamle yok!', flags: 64 });
             }
 
             if (gameSession.type === 'PvE') {
@@ -685,15 +1156,32 @@ module.exports = {
                 }
 
                 gameSession.outOfBook = false;
-                await ackUpdate({ content: 'Geri al\u0131n\u0131yor...', components: [] }).catch(() => { });
+                await ackUpdate({ content: 'Geri alınıyor...', components: [] }).catch(() => { });
 
-                const freshEval = await getStockfishMove(gameSession.chess.fen(), gameSession.difficulty, 1);
-                gameSession.evalData = { evaluation: freshEval.evaluation, mate: freshEval.mate };
-                gameSession.lastMoveBadge = "";
-                gameSession.lastTargetSquare = "";
-                gameSession.lastSourceSquare = "";
+                if (!gameSession.moveHistoryData) gameSession.moveHistoryData = [];
+                if (gameSession.moveHistoryData.length > 0) {
+                    gameSession.moveHistoryData.pop(); // Pop Stockfish's move
+                }
+                if (gameSession.moveHistoryData.length > 0) {
+                    gameSession.moveHistoryData.pop(); // Pop User's move
+                }
 
-                const msgData = await buildBoardMessage(gameSession.chess, ownerId, `2 hamle geri al\u0131nd\u0131. S\u0131ra sende.`, gameSession.evalData, gameSession.showEvoBar);
+                if (gameSession.moveHistoryData.length > 0) {
+                    const prevMove = gameSession.moveHistoryData[gameSession.moveHistoryData.length - 1];
+                    gameSession.lastMoveBadge = prevMove.badge;
+                    gameSession.lastTargetSquare = prevMove.targetSquare;
+                    gameSession.lastSourceSquare = prevMove.sourceSquare;
+                    gameSession.evalData = { ...prevMove.evalData };
+                } else {
+                    gameSession.lastMoveBadge = "";
+                    gameSession.lastTargetSquare = "";
+                    gameSession.lastSourceSquare = "";
+                    gameSession.evalData = { evaluation: 0.0, mate: null };
+                }
+
+                const messageText = `2 hamle geri alındı. Sıra sende.`;
+                gameSession.lastMessageText = messageText;
+                const msgData = await buildBoardMessage(gameSession.chess, ownerId, messageText, gameSession.evalData, gameSession.showEvoBar, gameSession.lastMoveBadge, gameSession.lastTargetSquare, null, gameSession.lastSourceSquare);
                 if (gameSession.message) return gameSession.message.edit(msgData);
                 return interaction.channel.send(msgData);
             }
@@ -713,8 +1201,10 @@ module.exports = {
             gameSession.chess._takebackRequestedBy = interaction.user.id;
             const opponentId = interaction.user.id === gameSession.playerWhite ? gameSession.playerBlack : gameSession.playerWhite;
 
+            const pendingMsgText = `<@${interaction.user.id}> son hamlesini geri almak istiyor... <@${opponentId}> kabul etmek i\u00e7in "Geri Alma Bekleniyor" butonuna bas.`;
+            gameSession.lastMessageText = pendingMsgText;
             // Board mesajını güncelle - rakip doğrudan tahta butonuna tıklarak kabul eder
-            const pendingMsgData = await buildBoardMessage(gameSession.chess, ownerId, `<@${interaction.user.id}> son hamlesini geri almak istiyor... <@${opponentId}> kabul etmek i\u00e7in "Geri Alma Bekleniyor" butonuna bas.`, gameSession.evalData, gameSession.showEvoBar);
+            const pendingMsgData = await buildBoardMessage(gameSession.chess, ownerId, pendingMsgText, gameSession.evalData, gameSession.showEvoBar);
             return ackUpdate(pendingMsgData).catch(() => { });
         }
 
@@ -732,15 +1222,27 @@ module.exports = {
             gameSession.chess._takebackState = null;
             gameSession.chess._takebackRequestedBy = null;
 
-            // Geri al\u0131nan pozisyon kitapta olabilir - book flag\u0131n\u0131 s\u0131f\u0131rla
-            gameSession.outOfBook = false;
+            if (gameSession.moveHistoryData.length > 0) {
+                gameSession.moveHistoryData.pop(); // Pop the undone move
+            }
 
-            // Yeni pozisyon i\u00e7in Stockfish'ten de\u011ferlendirme al
-            const freshEval = await getStockfishMove(gameSession.chess.fen(), gameSession.difficulty, 1);
-            gameSession.evalData = { evaluation: freshEval.evaluation, mate: freshEval.mate };
+            if (gameSession.moveHistoryData.length > 0) {
+                const prevMove = gameSession.moveHistoryData[gameSession.moveHistoryData.length - 1];
+                gameSession.lastMoveBadge = prevMove.badge;
+                gameSession.lastTargetSquare = prevMove.targetSquare;
+                gameSession.lastSourceSquare = prevMove.sourceSquare;
+                gameSession.evalData = { ...prevMove.evalData };
+            } else {
+                gameSession.lastMoveBadge = "";
+                gameSession.lastTargetSquare = "";
+                gameSession.lastSourceSquare = "";
+                gameSession.evalData = { evaluation: 0.0, mate: null };
+            }
 
             const currentTurnId = gameSession.chess.turn() === 'w' ? gameSession.playerWhite : gameSession.playerBlack;
-            const msgData = await buildBoardMessage(gameSession.chess, ownerId, `Geri alma kabul edildi! S\u0131ra <@${currentTurnId}>.`, gameSession.evalData, gameSession.showEvoBar);
+            const acceptMsgText = `Geri alma kabul edildi! Sıra <@${currentTurnId}>.`;
+            gameSession.lastMessageText = acceptMsgText;
+            const msgData = await buildBoardMessage(gameSession.chess, ownerId, acceptMsgText, gameSession.evalData, gameSession.showEvoBar, gameSession.lastMoveBadge, gameSession.lastTargetSquare, null, gameSession.lastSourceSquare);
 
             return ackUpdate(msgData).catch(() => { });
         }
@@ -754,7 +1256,9 @@ module.exports = {
                 gameSession.chess._takebackState = null;
                 gameSession.chess._takebackRequestedBy = null;
                 const currentTurnId = gameSession.chess.turn() === 'w' ? gameSession.playerWhite : gameSession.playerBlack;
-                const msgData = await buildBoardMessage(gameSession.chess, ownerId, `Geri alma iptal edildi. S\u0131ra <@${currentTurnId}>.`, gameSession.evalData, gameSession.showEvoBar);
+                const cancelMsgText = `Geri alma iptal edildi. S\u0131ra <@${currentTurnId}>.`;
+                gameSession.lastMessageText = cancelMsgText;
+                const msgData = await buildBoardMessage(gameSession.chess, ownerId, cancelMsgText, gameSession.evalData, gameSession.showEvoBar);
                 await ackUpdate({ content: 'Geri alma iptal edildi', components: [] }).catch(() => { });
                 if (gameSession.message) return gameSession.message.edit(msgData);
                 return interaction.channel.send(msgData);
@@ -763,16 +1267,17 @@ module.exports = {
             gameSession.chess._takebackState = null;
             gameSession.chess._takebackRequestedBy = null;
             const currentTurnId2 = gameSession.chess.turn() === 'w' ? gameSession.playerWhite : gameSession.playerBlack;
-            const msgData2 = await buildBoardMessage(gameSession.chess, ownerId, `Geri alma reddedildi. S\u0131ra <@${currentTurnId2}>.`, gameSession.evalData, gameSession.showEvoBar);
+            const rejectMsgText = `Geri alma reddedildi. S\u0131ra <@${currentTurnId2}>.`;
+            gameSession.lastMessageText = rejectMsgText;
+            const msgData2 = await buildBoardMessage(gameSession.chess, ownerId, rejectMsgText, gameSession.evalData, gameSession.showEvoBar);
             await ackUpdate({ content: 'Geri alma reddedildi', components: [] }).catch(() => { });
             if (gameSession.message) return gameSession.message.edit(msgData2);
             return interaction.channel.send(msgData2);
         }
 
         if (interaction.customId.startsWith('chess_move_btn')) {
-            const currentTurnId = gameSession.chess.turn() === 'w' ? gameSession.playerWhite : gameSession.playerBlack;
-            if (userId !== currentTurnId) {
-                return interaction.reply({ content: 'Şu an sıra sizde değil! Rakibinizin hamlesini bekleyin.', flags: 64 });
+            if (userId !== gameSession.playerWhite && userId !== gameSession.playerBlack) {
+                return interaction.reply({ content: 'Bu oyunun bir parçası değilsiniz!', flags: 64 });
             }
 
             const modal = new ModalBuilder()
@@ -785,8 +1290,7 @@ module.exports = {
                 .setStyle(TextInputStyle.Short)
                 .setPlaceholder('e4')
                 .setRequired(true)
-                .setMinLength(2)
-                .setMaxLength(5);
+                .setMinLength(2);
 
             const row = new ActionRowBuilder().addComponents(moveInput);
             modal.addComponents(row);
@@ -805,16 +1309,11 @@ module.exports = {
         }
 
         const userId = interaction.user.id;
-        const currentTurnId = gameSession.chess.turn() === 'w' ? gameSession.playerWhite : gameSession.playerBlack;
+        const isPlayerWhite = userId === gameSession.playerWhite;
+        const isPlayerBlack = userId === gameSession.playerBlack;
 
-        if (userId !== currentTurnId) {
-            return interaction.reply({ content: 'Şu an sıra sizde değil!', flags: 64 });
-        }
-
-        const move = interaction.fields.getTextInputValue('move_input').trim();
-
-        if (gameSession.isThinking) {
-            return interaction.reply({ content: 'Hamle analiz ediliyor, lütfen art arda hamle yapmayın!', flags: 64 });
+        if (!isPlayerWhite && !isPlayerBlack) {
+            return interaction.reply({ content: 'Bu oyunun bir parçası değilsiniz!', flags: 64 });
         }
 
         // Eğer bekleyen bir geri alma talebi varsa otomatik olarak iptal et
@@ -823,208 +1322,31 @@ module.exports = {
             gameSession.chess._takebackRequestedBy = null;
         }
 
-        const chess = gameSession.chess;
-        const fenBeforeUserMove = chess.fen();
-
-        let moveObj;
-        try {
-            moveObj = chess.move(move);
-        } catch (e) {
-            return interaction.reply({ content: `Geçersiz hamle: **${move}**. Lütfen kurallara uygun bir hamle yazın (örn: e4 veya Nf3).`, flags: 64 });
+        const moveInput = interaction.fields.getTextInputValue('move_input').trim();
+        const moves = moveInput.split(/\s+/).filter(Boolean);
+        if (moves.length === 0) {
+            return interaction.reply({ content: 'Lütfen geçerli bir hamle girin.', flags: 64 });
         }
 
-        gameSession.isThinking = true;
-        await interaction.deferUpdate();
+        const playerColor = isPlayerWhite ? 'w' : 'b';
 
-        try {
-            if (chess.isGameOver()) {
-                activeGames.delete(gameSession.playerWhite);
-                if (gameSession.type === 'PvP') activeGames.delete(gameSession.playerBlack);
+        if (!gameSession.premoves) {
+            gameSession.premoves = { w: [], b: [] };
+        }
 
-                let lastBadge = "";
-                const lastTarget = moveObj ? moveObj.to : "";
-                const lastSource = moveObj ? moveObj.from : "";
+        // Add moves to the queue
+        gameSession.premoves[playerColor].push(...moves);
 
-                if (gameSession.showAnalysis && moveObj) {
-                    if (chess.isCheckmate()) {
-                        // Mat hamlesi - Stockfish açık pozisyon analiz edemez.
-                        // Feda varsa brilliant, yoksa best.
-                        lastBadge = "best";
-                        const tempChess = new Chess(fenBeforeUserMove);
-                        tempChess.move(moveObj);
-                        const movedPieceVal = getPieceValue(moveObj.piece);
-                        const capturedPieceVal = getPieceValue(moveObj.captured);
-                        const isWhiteLastMove = chess.turn() === 'b';
-                        const opColor = isWhiteLastMove ? 'b' : 'w';
-                        const myColor = isWhiteLastMove ? 'w' : 'b';
-                        const attackedByOpp = tempChess.isAttacked(moveObj.to, opColor);
-                        const defendedByUs = tempChess.isAttacked(moveObj.to, myColor);
-                        const netLoss = movedPieceVal - capturedPieceVal;
-                        if (attackedByOpp && !defendedByUs && netLoss >= 2 && movedPieceVal >= 3) {
-                            lastBadge = "brilliant";
-                        }
-                    } else {
-                        // Beraberlik / Stalemate
-                        lastBadge = "best";
-                    }
-                }
+        const currentTurnColor = gameSession.chess.turn(); // 'w' or 'b'
+        const isPlayerTurn = (currentTurnColor === 'w' && isPlayerWhite) || (currentTurnColor === 'b' && isPlayerBlack);
 
-                const msgData = await buildBoardMessage(chess, gameSession.playerWhite, `Oyun bitti!`, gameSession.evalData, gameSession.showEvoBar, lastBadge, lastTarget, null, lastSource);
-                return interaction.editReply(msgData);
-            }
-
-            if (gameSession.type === 'PvP') {
-                let sfDataBeforeUser = { pvs: {} };
-                if (gameSession.showAnalysis) {
-                    sfDataBeforeUser = await getStockfishMove(fenBeforeUserMove, gameSession.difficulty, 3);
-                }
-                const prevEvalUser = { evaluation: gameSession.evalData.evaluation, mate: gameSession.evalData.mate };
-
-                const sfDataAfterUser = await getStockfishMove(chess.fen(), gameSession.difficulty, 1);
-
-                let userClassBadge = "";
-                let userTargetSquare = "";
-                let userSymbol = "";
-                if (gameSession.showAnalysis) {
-                    let isBook = false;
-                    if (!gameSession.outOfBook) {
-                        isBook = await checkChessDBBook(fenBeforeUserMove, moveObj);
-                        if (!isBook) gameSession.outOfBook = true;
-                    }
-
-                    if (isBook) {
-                        userClassBadge = "book";
-                    } else {
-                        const isWhiteMove = chess.turn() === 'b'; // Because turn already flipped
-                        userClassBadge = await classifyMove(prevEvalUser, sfDataAfterUser, isWhiteMove, sfDataBeforeUser.pvs, moveObj, fenBeforeUserMove, gameSession.lastMoveBadge);
-                    }
-                    userSymbol = badgeSymbols[userClassBadge] || "";
-                    userTargetSquare = moveObj.to;
-                }
-                gameSession.evalData = { evaluation: sfDataAfterUser.evaluation, mate: sfDataAfterUser.mate };
-                gameSession.lastMoveBadge = userClassBadge;
-                gameSession.lastTargetSquare = userTargetSquare;
-                gameSession.lastSourceSquare = moveObj.from;
-                gameSession.isThinking = false;
-
-                const nextPlayerId = chess.turn() === 'w' ? gameSession.playerWhite : gameSession.playerBlack;
-                const message = `Sıra sende <@${nextPlayerId}>!`;
-
-                const msgData = await buildBoardMessage(chess, gameSession.playerWhite, message, gameSession.evalData, gameSession.showEvoBar, userClassBadge, userTargetSquare, null, moveObj.from);
-                if (!activeGames.has(ownerId)) return;
-                return interaction.editReply(msgData);
-
-            } else {
-                // PvE Mode
-                let sfDataBeforeUser = { pvs: {} };
-                if (gameSession.showAnalysis) {
-                    sfDataBeforeUser = await getStockfishMove(fenBeforeUserMove, gameSession.difficulty, 3);
-                }
-                const prevEvalUser = { evaluation: gameSession.evalData.evaluation, mate: gameSession.evalData.mate };
-
-                const sfDataAfterUser = await getStockfishMove(chess.fen(), gameSession.difficulty, 1);
-
-                let userClassBadge = "";
-                let userTargetSquare = "";
-                let userSymbol = "";
-                if (gameSession.showAnalysis) {
-                    let isBook = false;
-                    if (!gameSession.outOfBook) {
-                        isBook = await checkChessDBBook(fenBeforeUserMove, moveObj);
-                        if (!isBook) gameSession.outOfBook = true;
-                    }
-
-                    if (isBook) {
-                        userClassBadge = "book";
-                    } else {
-                        userClassBadge = await classifyMove(prevEvalUser, sfDataAfterUser, true, sfDataBeforeUser.pvs, moveObj, fenBeforeUserMove, gameSession.lastMoveBadge);
-                    }
-                    userSymbol = badgeSymbols[userClassBadge] || "";
-                    userTargetSquare = moveObj.to;
-                }
-
-                gameSession.evalData = { evaluation: sfDataAfterUser.evaluation, mate: sfDataAfterUser.mate };
-
-                const interimMsgData = await buildBoardMessage(chess, gameSession.playerWhite, `Düşünüyor... ${userSymbol}`, gameSession.evalData, gameSession.showEvoBar, userClassBadge, userTargetSquare, null, moveObj.from);
-                if (!activeGames.has(ownerId)) return;
-                await interaction.editReply(interimMsgData);
-
-                if (!sfDataAfterUser.move) {
-                    gameSession.isThinking = false;
-                    return;
-                }
-
-                const fenBeforeSfMove = chess.fen();
-                let sfMoveObj;
-                try {
-                    sfMoveObj = chess.move(sfDataAfterUser.move);
-                } catch (e) {
-                    sfMoveObj = null;
-                }
-
-                const sfDataAfterSf = await getStockfishMove(chess.fen(), gameSession.difficulty, 1);
-
-                let sfClassBadge = "";
-                let sfTargetSquare = "";
-                let sfSymbol = "";
-
-                if (gameSession.showAnalysis && sfMoveObj) {
-                    if (chess.isGameOver() && chess.isCheckmate()) {
-                        // Stockfish'in mat hamlesi - Stockfish sonrası analiz edilemez
-                        // Feda varsa brilliant, yoksa best
-                        sfClassBadge = "best";
-                        const tempChess2 = new Chess(fenBeforeSfMove);
-                        tempChess2.move(sfMoveObj);
-                        const sfMovedVal = getPieceValue(sfMoveObj.piece);
-                        const sfCapturedVal = getPieceValue(sfMoveObj.captured);
-                        const sfOpColor = 'w'; // SF (black) moved, so opponent is white
-                        const sfMyColor = 'b';
-                        const sfAttacked = tempChess2.isAttacked(sfMoveObj.to, sfOpColor);
-                        const sfDefended = tempChess2.isAttacked(sfMoveObj.to, sfMyColor);
-                        const sfNetLoss = sfMovedVal - sfCapturedVal;
-                        if (sfAttacked && !sfDefended && sfNetLoss >= 2 && sfMovedVal >= 3) {
-                            sfClassBadge = "brilliant";
-                        }
-                    } else if (!chess.isGameOver()) {
-                        let isBookSf = false;
-                        if (!gameSession.outOfBook) {
-                            isBookSf = await checkChessDBBook(fenBeforeSfMove, sfMoveObj);
-                            if (!isBookSf) gameSession.outOfBook = true;
-                        }
-                        sfClassBadge = isBookSf ? "book" : await classifyMove(gameSession.evalData, sfDataAfterSf, false, null, sfMoveObj, fenBeforeSfMove, userClassBadge);
-                    }
-                    sfSymbol = badgeSymbols[sfClassBadge] || "";
-                    sfTargetSquare = sfMoveObj.to;
-                }
-                const sfSourceSquare = sfMoveObj ? sfMoveObj.from : sfDataAfterUser.move.substring(0, 2);
-
-                if (chess.isGameOver() && chess.isCheckmate()) {
-                    // Siyah mat edildi (Stockfish mated us): siyah i\u00e7in mate:0 = kaybetti
-                    // Stockfish beyaz oyuncuysa: +M0, siyahsa: -M0
-                    gameSession.evalData = { evaluation: null, mate: 0 };
-                } else {
-                    gameSession.evalData = { evaluation: sfDataAfterSf.evaluation, mate: sfDataAfterSf.mate };
-                }
-                gameSession.lastMoveBadge = sfClassBadge;
-                gameSession.lastTargetSquare = sfTargetSquare;
-                gameSession.lastSourceSquare = sfSourceSquare;
-                gameSession.isThinking = false;
-
-                if (chess.isGameOver()) {
-                    activeGames.delete(gameSession.playerWhite);
-                    const gameOverMsgData = await buildBoardMessage(chess, gameSession.playerWhite, `Oyun bitti!`, gameSession.evalData, gameSession.showEvoBar, sfClassBadge, sfTargetSquare, null, sfSourceSquare);
-                    // We deleted the game just above, but if it was deleted earlier we shouldn't send it.
-                    // Actually, if we reach here we just delete it ourselves, so it's fine.
-                    return interaction.editReply(gameOverMsgData);
-                }
-
-                const finalMsgData = await buildBoardMessage(chess, gameSession.playerWhite, `Stockfish oynadı: **${sfMoveObj ? sfMoveObj.san : sfDataAfterUser.move}** ${sfSymbol}\nSıra sende.`, gameSession.evalData, gameSession.showEvoBar, sfClassBadge, sfTargetSquare, null, sfSourceSquare);
-                if (!activeGames.has(ownerId)) return;
-                await interaction.editReply(finalMsgData);
-            }
-        } catch (error) {
-            console.error(error);
-            gameSession.isThinking = false;
+        if (isPlayerTurn && !gameSession.isThinking) {
+            const nextMove = gameSession.premoves[playerColor].shift();
+            // Process the move immediately. processMove handles deferring/updating interaction.
+            await processMove(gameSession, nextMove, playerColor, interaction);
+        } else {
+            const queueMsg = `Hamleler sıraya (premove) eklendi: ${moves.map(m => `**${m}**`).join(', ')}`;
+            return interaction.reply({ content: queueMsg, flags: 64 });
         }
     }
 }
